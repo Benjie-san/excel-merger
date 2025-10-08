@@ -7,6 +7,7 @@ const resetBtn = document.getElementById("resetBtn");
 const dropZone = document.getElementById("dropZone");
 const fileList = document.getElementById("fileList");
 const fileCount = document.getElementById("fileCount");
+const reportDiv = document.getElementById("report"); // <-- 👈 add this to your HTML too
 
 //fake progress 0% - 100%
 function simulateProgress() {
@@ -27,21 +28,6 @@ function simulateProgress() {
     }, 300);
   });
 }
-
-// filesInput.addEventListener("change", () => {
-//   fileList.innerHTML = ""; // clear old list
-
-//   const files = filesInput.files;
-//   if (files.length === 0) {
-//     return;
-//   }
-
-//   Array.from(files).forEach((file) => {
-//     const li = document.createElement("li");
-//     li.textContent = file.name;
-//     fileList.appendChild(li);
-//   });
-// });
 
 function updateFileList(files) {
   fileList.innerHTML = "";
@@ -81,9 +67,12 @@ dropZone.addEventListener("drop", (e) => {
   }
 });
 
+// ---- MAIN MERGE + REPORT ----
 uploadForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     downloadLink.style.display = "none";
+    reportDiv.innerHTML = "";
+
     const files = document.getElementById("files").files;
     if (!files.length) {
       alert("Please select at least one file");
@@ -107,29 +96,76 @@ uploadForm.addEventListener("submit", async (e) => {
       body: formData,
     });
   
-    if (response.ok) {
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      //const link = document.getElementById("downloadLink");
+    // if (response.ok) {
+    //   const blob = await response.blob();
+    //   const url = window.URL.createObjectURL(blob);
+    //   //const link = document.getElementById("downloadLink");
 
+    //   // Complete progress
+    //   progressBar.style.width = "100%";
+    //   progressBar.textContent = "100%";
+  
+
+    //   setTimeout(() => {
+    //     console.log("rrun???")
+    //     downloadLink.href = url;
+    //     downloadLink.download = "merged.xlsx";
+    //     downloadLink.style.display = "block";
+    //     downloadLink.textContent = "Download Merged File";
+
+    //     resetBtn.style.display = "flex"; // show reset button
+
+    //   }, 300); // half a second delay looks smooth
+
+    // } else {
+    //   alert("Error merging files");
+    //   progressContainer.style.display = "none";
+    // }
+    try {
+      // --- Updated: expect JSON with report and base64 file ---
+      const response = await fetch("/merge", {
+        method: "POST",
+        body: formData,
+      });
+  
+      const result = await response.json();
+      console.log("Response:", result.report);
       // Complete progress
       progressBar.style.width = "100%";
       progressBar.textContent = "100%";
-      
-      setTimeout(() => {
-        console.log("rrun???")
+      clearInterval;
+  
+      if (result.success) {
+        // --- ✅ Display Download Link ---
+        const blob = new Blob(
+          [Uint8Array.from(atob(result.mergedFile), (c) => c.charCodeAt(0))],
+          { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }
+        );
+        const url = window.URL.createObjectURL(blob);
         downloadLink.href = url;
         downloadLink.download = "merged.xlsx";
         downloadLink.style.display = "block";
         downloadLink.textContent = "Download Merged File";
-
-        resetBtn.style.display = "flex"; // show reset button
-
-      }, 300); // half a second delay looks smooth
-
-    } else {
-      alert("Error merging files");
-      progressContainer.style.display = "none";
+        resetBtn.style.display = "flex";
+  
+        // --- ✅ Show report summary ---
+        const report = result.report;
+        reportDiv.innerHTML = `
+          <h3>📊 Report</h3>
+          <p><b>Total Rows:</b> ${report.totalRows}</p>
+          <p><b>Total Columns:</b> ${report.totalColumns}</p>
+          <h4>Specific Value Counts:</h4>
+          <table border="1" cellspacing="0" cellpadding="5">
+            <tr><th>Value</th><th>Count</th></tr>
+      
+          </table>
+        `;
+      } else {
+        alert("Error merging files");
+      }
+    } catch (error) {
+      alert("Error: " + error.message);
+      console.error("Error:", error);
     }
   });
 
@@ -144,5 +180,6 @@ resetBtn.addEventListener("click", () => {
   progressBar.textContent = "0%";
   progressContainer.style.display = "none";
   fileList.innerHTML = ""; 
-  fileCount.innerHTML = "No files selected"
+  fileCount.innerHTML = "No files selected";
+  reportDiv.innerHTML = ""; 
 });

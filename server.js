@@ -66,27 +66,70 @@ app.post("/merge", upload.array("files"), (req, res) => {
         }
       }
 
-      // // Keep headers from first file only
-      // if (index === 0) {
-      //   mergedData.push(...sheetData);
-      // } else {
-      //   mergedData.push(...sheetData.slice(1));
-      // }
     });
 
     // Create new workbook
     const newWB = xlsx.utils.book_new();
     const newWS = xlsx.utils.aoa_to_sheet(mergedData);
     xlsx.utils.book_append_sheet(newWB, newWS, "Merged");
+    const buffer = xlsx.write(newWB, { type: "buffer", bookType: "xlsx" });
+
+    // --- Generate Report ---
+    const headers = mergedData[0];
+    const dataRows = mergedData.slice(1);
+
+    const report = {
+      totalRows: dataRows.length,
+      totalColumns: headers.length,
+      columns: headers,
+      sample: dataRows.slice(0, 5),
+      columnSummary: {},
+    };
+
+    // Analyze each column
+    headers.forEach((colName, colIndex) => {
+      const values = dataRows.map((row) => row[colIndex]).filter((v) => v !== undefined && v !== null && v !== "");
+
+      const uniqueCount = new Set(values).size;
+      const numericValues = values
+        .map((v) => parseFloat(v))
+        .filter((n) => !isNaN(n));
+
+      const sum = numericValues.reduce((a, b) => a + b, 0);
+      const avg = numericValues.length ? sum / numericValues.length : null;
+
+      report.columnSummary[colName] = {
+        uniqueValues: uniqueCount,
+        totalEntries: values.length,
+        numericCount: numericValues.length,
+        sum: numericValues.length ? sum : null,
+        average: numericValues.length ? avg : null,
+      };
+    });
+
+    // // Example: count unique values in column 2 (index 1)
+    // const uniqueValues = new Set(dataRows.map((r) => r[1]));
+    // report.uniqueInColumn2 = uniqueValues.size;
 
     // Send file to client
-    const buffer = xlsx.write(newWB, { type: "buffer", bookType: "xlsx" });
-    res.setHeader("Content-Disposition", "attachment; filename=merged.xlsx");
-    res.setHeader(
-      "Content-Type",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    );
-    res.send(buffer);
+ 
+    // res.setHeader("Content-Disposition", "attachment; filename=merged.xlsx");
+    // res.setHeader(
+    //   "Content-Type",
+    //   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    // );
+    // // res.send(buffer);
+    // res.json({
+    //   success: true,
+    //   report,
+    //   mergedFile: buffer.toString("base64"), // send file as base64
+    // });
+     // Send both the file and report
+     res.json({
+      success: true,
+      report,
+      mergedFile: buffer.toString("base64"),
+    });
   } catch (err) {
     console.error("Merge error:", err);
     res.status(500).send("Error merging files");
