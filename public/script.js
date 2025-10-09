@@ -129,7 +129,7 @@ uploadForm.addEventListener("submit", async (e) => {
       });
   
       const result = await response.json();
-      console.log("Response:", result.report);
+      console.log("Response:", result.report.columnSummary.Duty.sum);
       // Complete progress
       progressBar.style.width = "100%";
       progressBar.textContent = "100%";
@@ -153,11 +153,13 @@ uploadForm.addEventListener("submit", async (e) => {
         reportDiv.innerHTML = `
           <h3>📊 Report</h3>
           <p><b>Total Rows:</b> ${report.totalRows}</p>
-          <p><b>Total Columns:</b> ${report.totalColumns}</p>
-          <h4>Specific Value Counts:</h4>
+          <p><b>Total Duty:</b> ${Math.abs(report.columnSummary.Duty.sum).toFixed(2)}</p>
+          <p><b>Total GST:</b> ${Math.abs(report.columnSummary["Gov. Sales Tax"].sum).toFixed(2)}</p>
           <table border="1" cellspacing="0" cellpadding="5">
             <tr><th>Value</th><th>Count</th></tr>
-      
+            ${Object.entries(report.targetValueCounts)
+              .map(([val, count]) => `<tr><td>${val}</td><td>${count}</td></tr>`)
+              .join("")}
           </table>
         `;
       } else {

@@ -39,7 +39,7 @@ app.post("/merge", upload.array("files"), (req, res) => {
        // 👇 Remove top rows (4 for first file, 5 for the rest)
        let rowsToRemove = index === 0 ? 3 : 4; //changed from first and fifth row due to missing data
        let trimmedData = sheetData.slice(rowsToRemove);
- 
+      
        // 👇 Remove empty rows (rows that are entirely blank)
        trimmedData = trimmedData.filter(
          (row) => row.some((cell) => cell !== null && cell !== undefined && cell !== "")
@@ -77,14 +77,44 @@ app.post("/merge", upload.array("files"), (req, res) => {
     // --- Generate Report ---
     const headers = mergedData[0];
     const dataRows = mergedData.slice(1);
-
+   
+   // Basic report
     const report = {
       totalRows: dataRows.length,
       totalColumns: headers.length,
       columns: headers,
       sample: dataRows.slice(0, 5),
       columnSummary: {},
+      targetValueCounts: {}, // 👈 new section
     };
+
+    // ✅ Define target values to count
+    const targetValues = [0.0175, 0.085, 0.71, 0.28];
+    const tolerance = 1e-3;
+    // Initialize counters
+    targetValues.forEach((val) => {
+      report.targetValueCounts[val] = 0;
+    });
+    let targetColumnIndex = 0;
+    targetColumnIndex = report.columns.indexOf("Brokerage Total");
+        // Count occurrences across all cells
+    dataRows.forEach((row) => {
+      const cell = row[targetColumnIndex];
+      if (cell === undefined || cell === null) return;
+    
+      const cellValue = String(cell).trim();
+      const num = parseFloat(cellValue);
+    
+      if (!isNaN(num)) {
+        const rounded = parseFloat(num.toFixed(3));
+        targetValues.forEach((val) => {
+          if (Math.abs(rounded - val) < tolerance) {
+            report.targetValueCounts[val]++;
+          }
+        });
+      }
+    });
+
 
     // Analyze each column
     headers.forEach((colName, colIndex) => {
