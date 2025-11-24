@@ -23,20 +23,27 @@ body::-webkit-scrollbar {
   display: none;
 }
 
-main, #fileList, #uploadForm, #files, #createdBy, #dropZone, #downloadLink, #progressContainer, #progressBar, #merge-btn {
+main{
+  display: flex;
+  justify-content: start;
+  align-items: center;
+  flex-direction: row;
+}
+
+#excel-merger, #dt-header-file, #fileList, #uploadForm, #uploadForm-dt-header, #files, #createdBy, #dropZone, #dropZone-dt-header, #downloadLink, #progressContainer, #progressBar, #merge-btn {
     font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
     margin: 5px;
 }
 
-main, #uploadForm, #fileList, #dropZone{
+#excel-merger, #uploadForm,#uploadForm-dt-header, #fileList, #dropZone, #dropZone-dt-header, #dt-header-file{
   display: flex;
   justify-content: center;
   align-items: center;
   flex-direction: column;
 }
 
-main{
-  width: fit-content;
+#excel-merger, #dt-header-file{
+  width: fit-content/50%;
   gap: 5px;
   margin: 10px;
   background-color: #1f2937; /* main div bg */
@@ -49,8 +56,8 @@ main{
   font-size: 50px;
 }
 
-#dropZone {
-  width: 50vw;
+#dropZone, #dropZone-dt-header {
+  width: 30vw;
   border: 2px dashed #aaa;
   border-radius: 10px;
   padding: 30px;
@@ -61,7 +68,7 @@ main{
   gap:10px;
 }
 
-#dropZone.dragover {
+#dropZone.dragover, #dropZone-dt-header.dragover {
   background-color: #f0f8ff;
   border-color: #4caf50;
 }
@@ -70,7 +77,7 @@ main{
   display: none; /* Hides the default file input */
 } 
 
-.custom-file-upload-label, #merge-btn, #downloadLink, #resetBtn {
+.custom-file-upload-label, #merge-btn, #process-btn, #downloadLink, #resetBtn {
   display: inline-block; /* Makes the label behave like a button*/
   background-color: #ff581f;
   color: white;
@@ -80,14 +87,14 @@ main{
   cursor: pointer;
   /* Add other styling as desired*/
 }
-
+/* 
 #fileNameDisplay {
   margin-left: 10px;
   font-style: italic;
   color: #555;
-}
+} */
 
-#fileList {
+#fileList, #fileList-dt-header {
   width: fit-content;
   list-style-type: none;
   padding: 0;
@@ -95,7 +102,7 @@ main{
   font-size: 14px;
 }
   
-#fileList li {
+#fileList li, #fileList-dt-header li {
   width: 50vw;
   overflow: hidden;
   background: #111827;
@@ -114,16 +121,16 @@ input[type="checkbox"]:checked {
   accent-color: #ff581f;
 }
 
-#progressContainer {
+#progressContainer, #progressContainer-dt-header {
   width: 100%;
   border-radius: 10px;
 }
 
-#merge-btn{
+#merge-btn, #process-btn{
   font-size: 15px;
 }
 
-#progressBar {
+#progressBar, #progressBar-dt-header {
   border-radius: 10px;
   width: 0%;
   height: 20px;

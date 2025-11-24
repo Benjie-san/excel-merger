@@ -14,52 +14,84 @@
   <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
 </head>
 <body>
-  <h2>Merge Excel Files</h2>
+  <h2>Customs Billing Portal</h2>
   <main>
+    <div id="excel-merger">
+      <h1>Excel Merger</h1>
+      <form id="uploadForm" enctype="multipart/form-data">
 
-    <form id="uploadForm" enctype="multipart/form-data">
-
-      <div id="dropZone">
+        <div id="dropZone">
+          
+          <i id="upload-icon" class="bi bi-file-earmark-arrow-up-fill"></i>
+         
+          <p> Drag & Drop Excel files here<br>or <br>click below to select</p>
+          <label for="files" class="custom-file-upload-label">Choose Files</label>
+          <input class="custom-file-upload" type="file" name="files" id="files" multiple accept=".xlsx">
+          <span id="fileCount">No files selected</span>
+        </div>
+  
+  
+        <ul id="fileList"></ul>
+  
+        <label id="add-filename">
+          <input type="checkbox" id="addFilename" />
+          <p>Add filename as first column</p>
+        </label>
+  
         
-        <i id="upload-icon" class="bi bi-file-earmark-arrow-up-fill"></i>
+        <div id="progressContainer" style="display:none;">
+          <div id="progressBar"></div>
+        </div>
+        
+        <button id="merge-btn" type="submit">Merge</button>
+  
        
-        <p> Drag & Drop Excel files here<br>or <br>click below to select</p>
-        <label for="files" class="custom-file-upload-label">Choose Files</label>
-        <input class="custom-file-upload" type="file" name="files" id="files" multiple accept=".xlsx">
-        <span id="fileCount">No files selected</span>
-      </div>
-
-
-      <ul id="fileList"></ul>
-
-      <label id="add-filename">
-        <input type="checkbox" id="addFilename" />
-        <p>Add filename as first column</p>
-      </label>
-
+      </form>
       
-      <div id="progressContainer" style="display:none;">
-        <div id="progressBar"></div>
+      <div id="result-btn">
+        <a id="downloadLink" style="display:none;"> Download Merged File</a>
+  
+  
+        <button id="resetBtn" style="display:none;">
+          <span class="material-symbols-outlined">
+          refresh
+          </span>
+          <p>Start Over</p>
+        </button>
       </div>
-      
-      <button id="merge-btn" type="submit">Merge</button>
+  
+      <div id="report"></div>
 
-     
-    </form>
-    
-    <div id="result-btn">
-      <a id="downloadLink" style="display:none;"> Download Merged File</a>
-
-
-      <button id="resetBtn" style="display:none;">
-        <span class="material-symbols-outlined">
-        refresh
-        </span>
-        <p>Start Over</p>
-      </button>
     </div>
 
-    <div id="report"></div>
+    <div id="dt-header-file">
+      <h1>D/T Header File</h1>
+
+      <form id="uploadForm-dt-header" enctype="multipart/form-data">
+
+        <div id="dropZone-dt-header">
+          <i id="upload-icon" class="bi bi-file-earmark-arrow-up-fill"></i>
+          <label for="files" class="custom-file-upload-label">Choose or Drop SFTP File</label>
+          <input class="custom-file-upload" type="file" name="files-dt-sftp" id="files-dt-sftp" accept=".xlsx">
+        </div>
+        
+        <div id="dropZone-dt-header">
+          <i id="upload-icon" class="bi bi-file-earmark-arrow-up-fill"></i>
+          <label for="files" class="custom-file-upload-label">Choose or Drop Header File</label>
+          <input class="custom-file-upload" type="file" name="files-dt-header" id="files-dt-header" accept=".xlsx">
+
+        </div>
+
+        <ul id="fileList-dt-header"></ul>
+
+        <div id="progressContainer-dt-header" style="display:none;">
+          <div id="progressBar-dt-header"></div>
+        </div>
+        
+        <button id="process-btn" type="submit">Process File & Download</button>
+      </form>
+    </div>
+    
 
   </main>
 

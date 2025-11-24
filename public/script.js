@@ -9,7 +9,7 @@
  *  - Creates downloadable merged.xlsx
  ******************************************************************************/
 
-// ========== DOM ELEMENTS ==========
+// ========== DOM ELEMENTS FOR EXCEL MERGER ==========
 const progressContainer = document.getElementById("progressContainer");
 const progressBar = document.getElementById("progressBar");
 const uploadForm = document.getElementById("uploadForm");
@@ -21,6 +21,15 @@ const fileList = document.getElementById("fileList");
 const fileCount = document.getElementById("fileCount");
 const reportDiv = document.getElementById("report");
 
+// ========== DOM ELEMENTS FOR EXCEL MERGER ==========
+const progressContainerDtHeader = document.getElementById("progressContainer-dt-header");
+const progressBarDtHeader = document.getElementById("progressBar");
+const uploadFormDtHeader = document.getElementById("uploadForm-dt-header");
+const filesInputDtHeader = document.getElementById("files-dt-header");
+const downloadLinkDtHeader = document.getElementById("downloadLink-dt-header");
+const resetBtnDtHeader = document.getElementById("resetBtn-dt-header");
+const dropZoneDtHeader = document.getElementById("dropZone-dt-header");
+const fileListDtHeader = document.getElementById("fileList-dt-header");
 
 // =============================================================================
 //  Helper: Fake progress effect
@@ -60,12 +69,32 @@ function updateFileList(files) {
 
 
 // =============================================================================
+//  Show file names in list in DTHeader
+// =============================================================================
+function updateFileListDtHeader(files) {
+  fileListDtHeader.innerHTML = "";
+  Array.from(files).forEach((file) => {
+    const li = document.createElement("li");
+    li.textContent = file.name;
+    fileListDtHeader.appendChild(li);
+  });
+}
+
+// =============================================================================
 //  Handle manual file selection
 // =============================================================================
 filesInput.addEventListener("change", () => {
   updateFileList(filesInput.files);
   fileCount.innerHTML = `${filesInput.files.length} files selected`;
 });
+
+// =============================================================================
+//  Handle manual file selection for DT Header
+// =============================================================================
+filesInputDtHeader.addEventListener("change", () => {
+  updateFileListDtHeader(filesInputDtHeader.files);
+});
+
 
 
 // =============================================================================
@@ -89,6 +118,29 @@ dropZone.addEventListener("drop", (e) => {
     filesInput.files = files;
     updateFileList(files);
     fileCount.innerHTML = `${files.length} files selected`;
+  }
+});
+
+// =============================================================================
+//  Drag and Drop Support for DT Header File
+// =============================================================================
+dropZoneDtHeader.addEventListener("dragover", (e) => {
+  e.preventDefault();
+  dropZoneDtHeader.classList.add("dragover");
+});
+
+dropZoneDtHeader.addEventListener("dragleave", () => {
+  dropZoneDtHeader.classList.remove("dragover");
+});
+
+dropZoneDtHeader.addEventListener("drop", (e) => {
+  e.preventDefault();
+  dropZoneDtHeader.classList.remove("dragover");
+
+  const filesInputDtHeader = e.dataTransfer.files;
+  if (filesInputDtHeader.length > 0) {
+    filesInputDtHeader.files = files;
+    updateFileListDtHeader(files);
   }
 });
 
@@ -316,4 +368,24 @@ resetBtn.addEventListener("click", () => {
   fileList.innerHTML = "";
   fileCount.innerHTML = "No files selected";
   reportDiv.innerHTML = "";
+});
+
+// =============================================================================
+//  D/T Header File
+// =============================================================================
+uploadFormDtHeader.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  reportDiv.innerHTML = "";
+  downloadLink.style.display = "none";
+
+  const files = filesInputDtHeader.files;
+  if (!files.length) {
+    alert("Please select files");
+    return;
+  }
+
+  progressContainerDtHeader.style.display = "block";
+  await simulateProgress();
+
+  
 });
