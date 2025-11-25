@@ -182,4 +182,56 @@ input[type="checkbox"]:checked {
     color: #ff581f;
   }
 
+  /* DT header tool */
+
+  .tool-section {
+    margin-top: 40px;
+    padding: 10px;
+    border: 2px solid #ddd;
+    border-radius: 10px;
+  }
+  
+  .drop-area {
+    border: 2px dashed #888;
+    border-radius: 10px;
+    padding: 10px;
+    text-align: center;
+    background: #fafafa;
+    margin-bottom: 5px;
+    cursor: pointer;
+    transition: 0.2s;
+  }
+  
+  .drop-area.dragover {
+    background: #e8f9ff;
+    border-color: #1e90ff;
+  }
+  
+  .filename {
+    font-size: 14px;
+    margin-bottom: 15px;
+    color: #fff;
+  }
+  
+  .btn-primary {
+    background: #0070f3;
+    color: white;
+    padding: 12px 18px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    margin-top: 15px;
+  }
+  
+  .btn-primary:hover {
+    background: #0059c9;
+  }
+  
+  .report-box {
+    margin-top: 20px;
+    padding: 15px;
+    background: #fff;
+    border-left: 4px solid #0070f3;
+    white-space: pre-wrap;
+  }
   

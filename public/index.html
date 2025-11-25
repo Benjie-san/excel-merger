@@ -63,7 +63,7 @@
       <div id="report"></div>
 
     </div>
-
+<!-- 
     <div id="dt-header-file">
       <h1>D/T Header File</h1>
 
@@ -91,8 +91,48 @@
         <button id="process-btn" type="submit">Process File & Download</button>
       </form>
     </div>
-    
+     -->
+<!-- =======================================================
+     EXCEL MODIFY TOOL (SECOND FEATURE)
+     ======================================================= -->
+     <div id="modifyTool" class="tool-section">
 
+      <h2>Excel Modifier Tool</h2>
+      <p class="sub">Extract rows from Source → Insert into Target → Modify column → Remove duplicates</p>
+    
+      <!-- DROP ZONE FOR SOURCE FILE -->
+      <div id="sourceDropZone" class="drop-area">
+        <p>Drag & Drop Source Excel File Here</p>
+        <p>or click to select</p>
+        <input type="file" id="sourceFileInput" accept=".xlsx" hidden />
+      </div>
+      <p id="sourceFileName" class="filename"></p>
+    
+      <!-- DROP ZONE FOR TARGET FILE -->
+      <div id="targetDropZone" class="drop-area">
+        <p>Drag & Drop Target Excel File Here</p>
+        <p>or click to select</p>
+        <input type="file" id="targetFileInput" accept=".xlsx" hidden />
+      </div>
+      <p id="targetFileName" class="filename"></p>
+    
+      <hr>
+    
+      <!-- MODIFY OPTIONS
+      <label>Select duplicate detection column:</label>
+      <input type="text" id="duplicateColumn" placeholder="e.g. Invoice No" />
+    
+      <label>Select column to modify:</label>
+      <input type="text" id="modifyColumn" placeholder="e.g. Amount" />
+    
+      <label>Modify rule (percentage):</label>
+      <input type="number" id="modifyPercent" placeholder="e.g. 10 for +10%" />
+     -->
+      <button id="runModify" class="btn-primary">Run Modify Process</button>
+    
+      <div id="modifyReport" class="report-box"></div>
+    
+    </div>
   </main>
 
   <div id="createdBy">
