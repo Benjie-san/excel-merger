@@ -1,3 +1,4 @@
+//Toggle to show the section
 const excelMerger = document.getElementById("excel-merger");
 const DTHeaderFile = document.getElementById("modifyTool");
 
@@ -229,22 +230,85 @@ function analyzeData(mergedData) {
   return report;
 }
 
+// ===============================
+// FORCE GENERAL NUMBER FORMAT
+// ===============================
+function forceGeneralNumber(ws, r, c, value) {
+  const ref = XLSX.utils.encode_cell({ r, c });
+  ws[ref] = {
+    t: "n",
+    v: value,
+    z: "0"       // TRUE GENERAL numeric (no currency)
+  };
+}
 
-// =============================================================================
-//  EXPORT MERGED EXCEL (browser download)
-// =============================================================================
+function convertColumnRangeToNumbers(aoa, startRow, colStart, colEnd, ws) {
+  for (let r = startRow; r < aoa.length; r++) {
+    const row = aoa[r];
+    if (!row) continue;
+
+    for (let c = colStart; c <= colEnd; c++) {
+      let v = row[c];
+      if (v === undefined || v === null || v === "") continue;
+
+      let s = String(v).trim().replace(/,/g, "");
+      const num = parseFloat(s);
+
+      if (!isNaN(num)) {
+        aoa[r][c] = num;          // update AoA
+        forceGeneralNumber(ws, r, c, num); // override Excel’s formatting
+      }
+    }
+  }
+}
+
 function exportMergedExcel(mergedData) {
+  if (!mergedData.length) return;
+
+  const aoa = mergedData.map(r => [...r]);
+
+  // detect file type using filenames
+  const headerMode  = Array.from(filesInput.files).some(f => f.name.includes("_DutiesHeader"));
+  const itemMode    = Array.from(filesInput.files).some(f => f.name.includes("_DutiesItem"));
+
+  // workbook and sheet
   const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.aoa_to_sheet(mergedData);
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+  // row 1 downward (because you removed first 5 rows earlier)
+  const startRow = 1;
+
+  // DutiesHeader → convert J (9) to Q (16)
+  if (headerMode) {
+    convertColumnRangeToNumbers(aoa, startRow, 9, 16, ws);
+  }
+
+  // DutiesItem → convert only Duty + GST
+  if (itemMode) {
+    const headers = aoa[0];
+    const dutyIdx = headers.indexOf("Duty");
+    const gstIdx  = headers.indexOf("Gov. Sales Tax");
+
+    if (dutyIdx !== -1)
+      convertColumnRangeToNumbers(aoa, startRow, dutyIdx, dutyIdx, ws);
+
+    if (gstIdx !== -1)
+      convertColumnRangeToNumbers(aoa, startRow, gstIdx, gstIdx, ws);
+  }
+
   XLSX.utils.book_append_sheet(wb, ws, "Merged");
 
-  const wbout = XLSX.write(wb, { bookType: "xlsx", type: "binary" });
+  const wbout = XLSX.write(wb, {
+    bookType: "xlsx",
+    type: "binary",
+    compression: true,
+    bookSST: false
+  });
 
   function s2ab(s) {
     const buf = new ArrayBuffer(s.length);
     const view = new Uint8Array(buf);
-    for (let i = 0; i < s.length; i++)
-      view[i] = s.charCodeAt(i) & 0xff;
+    for (let i = 0; i < s.length; i++) view[i] = s.charCodeAt(0) & 0xff;
     return buf;
   }
 
@@ -322,6 +386,17 @@ resetBtn.addEventListener("click", () => {
   reportDiv.innerHTML = "";
 });
 
+
+function generateTimestamp12() {
+  const now = new Date();
+  const yy = String(now.getFullYear()).slice(-2);
+  const MM = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  const HH = String(now.getHours()).padStart(2, "0");
+  const mm = String(now.getMinutes()).padStart(2, "0");
+  const ss = String(now.getSeconds()).padStart(2, "0");
+  return yy + MM + dd + HH + mm + ss;
+}
 
 
 /*****************************************************
@@ -430,7 +505,26 @@ resetBtn.addEventListener("click", () => {
     } = {}) {
       try {
         if (!sourceFileObj || !targetFileObj) { alert("Please provide Source and Target files."); return; }
-  
+        
+        // Build output filename based on target file name
+        let outName = targetFileObj.name;
+
+        // Regex to find timestamp before _DutiesHeader
+        const stampRegex = /(\d{12})(?=_DutiesHeader)/;
+
+        const newStamp = generateTimestamp12();
+
+        if (stampRegex.test(outName)) {
+          // Replace existing 12-digit timestamp
+          outName = outName.replace(stampRegex, newStamp);
+        } else {
+          // If no timestamp exists, insert before _DutiesHeader
+          outName = outName.replace("_DutiesHeader", `${newStamp}_DutiesHeader`);
+        }
+
+        console.log("Final output name:", outName);
+
+
         const COL_AC = 28, COL_AS = 44;
         const COL_A = 0, COL_B = 1, COL_C = 2, COL_D = 3, COL_E = 4, COL_F = 5, COL_H = 7;
         const COL_J = 9, COL_K = 10, COL_Q = 16, COL_R = 17;
@@ -521,7 +615,7 @@ resetBtn.addEventListener("click", () => {
         }
   
         // download
-        downloadAoA_MOD(finalAoA, "updated_target.xlsx");
+        downloadAoA_MOD(finalAoA, outName, targetRows.length);
   
         if (modifyReport_MOD) {
           modifyReport_MOD.innerHTML = `
