@@ -1,3 +1,17 @@
+const excelMerger = document.getElementById("excel-merger");
+const DTHeaderFile = document.getElementById("modifyTool");
+
+function showDisplay(item){
+  if(item){
+    excelMerger.style.display = "flex";
+    DTHeaderFile.style.display = "none";
+  }else{
+    excelMerger.style.display = "none";
+    DTHeaderFile.style.display = "flex";
+  }
+}
+
+
 /*******************************************************************************
  *  CLIENT-SIDE EXCEL MERGER + ANALYZER
  *  - Processes XLSX files entirely in the browser
@@ -21,7 +35,7 @@ const fileList = document.getElementById("fileList");
 const fileCount = document.getElementById("fileCount");
 const reportDiv = document.getElementById("report");
 
-
+let DutiesHeaderFile = "";
 // =============================================================================
 //  Helper: Fake progress effect
 // =============================================================================
@@ -401,6 +415,7 @@ function setupDropZone(dropArea, fileInput, fileNameDisplay, storageVarSetter) {
     }
     storageVarSetter(file);
     fileNameDisplay.textContent = file.name;
+    DutiesHeaderFile = file.name;
     console.log("File input set file:", file.name);
   });
 }

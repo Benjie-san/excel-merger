@@ -8,6 +8,7 @@
   'opsz' 24
 }
 
+
 body{
     display: flex;
     justify-content: center;
@@ -30,25 +31,66 @@ main{
   flex-direction: row;
 }
 
-#excel-merger, #dt-header-file, #fileList, #uploadForm, #uploadForm-dt-header, #files, #createdBy, #dropZone, #dropZone-dt-header, #downloadLink, #progressContainer, #progressBar, #merge-btn {
+.side-bar{
+  position: fixed;
+  display: flex;
+  top: 0;
+  left: 0;
+  width: 15vw;
+  height: 100vh;
+}
+
+#excel-merger, #fileList, #uploadForm, #files, #createdBy, #dropZone,#downloadLink, #progressContainer, #progressBar, #merge-btn, .tool-section {
     font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
     margin: 5px;
 }
 
-#excel-merger, #uploadForm,#uploadForm-dt-header, #fileList, #dropZone, #dropZone-dt-header, #dt-header-file{
+#excel-merger, #uploadForm,#uploadForm-dt-header, #fileList, #dropZone, #dropZone-dt-header,.tool-section, #link-list, .side-bar{
   display: flex;
   justify-content: center;
   align-items: center;
   flex-direction: column;
 }
 
-#excel-merger, #dt-header-file{
+.side-bar{
+  justify-content: flex-start;
+  overflow: hidden;
+  padding: 10px;
+  border-right: 1px solid white;
+}
+
+.side-bar img{
+  margin-top: 20px;
+  margin-bottom: 40px;
+}
+
+.side-bar a{
+  padding: 10px;
+  margin: 10px;
+  width: 100%;
+  text-align: center;
+}
+
+.side-bar a:hover{
+  background-color: #ff581f;
+  color: white;
+}
+
+#excel-merger, .tool-section{
+  display: flex;
   width: fit-content/50%;
   gap: 5px;
   margin: 10px;
   background-color: #1f2937; /* main div bg */
   padding: 20px;
   border-radius: 10px;
+}
+.tool-section{
+  display: none;
+}
+
+#link-merger, #link-modifier{
+  cursor: pointer;
 }
 
 #upload-icon{
@@ -87,12 +129,6 @@ main{
   cursor: pointer;
   /* Add other styling as desired*/
 }
-/* 
-#fileNameDisplay {
-  margin-left: 10px;
-  font-style: italic;
-  color: #555;
-} */
 
 #fileList, #fileList-dt-header {
   width: fit-content;
@@ -174,20 +210,22 @@ input[type="checkbox"]:checked {
   justify-content: end;
   align-items: baseline;
   flex-direction: start;
-  gap: 5px;
+  position: absolute;
+  bottom: 0;
   margin: 5px;
-  }
+  padding: 10px;
+}
   
-  #createdBy a {
-    color: #ff581f;
-  }
+#createdBy a {
+  color: #ff581f;
+}
 
   /* DT header tool */
 
   .tool-section {
+    background-color: #1f2937;
     margin-top: 40px;
-    padding: 10px;
-    border: 2px solid #ddd;
+    padding: 40px;
     border-radius: 10px;
   }
   
@@ -196,14 +234,15 @@ input[type="checkbox"]:checked {
     border-radius: 10px;
     padding: 10px;
     text-align: center;
-    background: #fafafa;
+    background: #1f2937;
     margin-bottom: 5px;
     cursor: pointer;
     transition: 0.2s;
+    width: 100%;
   }
   
   .drop-area.dragover {
-    background: #e8f9ff;
+    background: #1f2937;
     border-color: #1e90ff;
   }
   
@@ -214,13 +253,14 @@ input[type="checkbox"]:checked {
   }
   
   .btn-primary {
-    background: #0070f3;
+    background: #ff581f;
     color: white;
     padding: 12px 18px;
     border-radius: 8px;
     border: none;
     cursor: pointer;
     margin-top: 15px;
+    align-self: right;
   }
   
   .btn-primary:hover {
@@ -230,8 +270,14 @@ input[type="checkbox"]:checked {
   .report-box {
     margin-top: 20px;
     padding: 15px;
-    background: #fff;
+    background: #1f2937;
     border-left: 4px solid #0070f3;
     white-space: pre-wrap;
   }
   
+  hr {
+    border: 0;
+    height: 1px;
+    background-color: #888;
+    width: 100%;
+  }

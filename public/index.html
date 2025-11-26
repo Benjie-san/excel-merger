@@ -15,7 +15,25 @@
 </head>
 <body>
   <h2>Customs Billing Portal</h2>
+
+  <div class="side-bar">
+
+    <image height="100px" width="100px" src="./assets/acb-white.png"/>
+    <hr>
+    <a id="link-merger" onclick="showDisplay(true)">Excel Merger</a>
+    <hr>
+    <a id="link-modifier" onclick="showDisplay(false)" >D/T Header file</a>
+    <hr>
+
+    <div id="createdBy">
+      <h4>By </h4> <a href="_BLANK">Benjamin Perez</a>
+    </div>
+
+  </div>
+
   <main>
+
+
     <div id="excel-merger">
       <h1>Excel Merger</h1>
       <form id="uploadForm" enctype="multipart/form-data">
@@ -42,6 +60,8 @@
         <div id="progressContainer" style="display:none;">
           <div id="progressBar"></div>
         </div>
+
+        <hr>
         
         <button id="merge-btn" type="submit">Merge</button>
   
@@ -63,46 +83,20 @@
       <div id="report"></div>
 
     </div>
-<!-- 
-    <div id="dt-header-file">
-      <h1>D/T Header File</h1>
 
-      <form id="uploadForm-dt-header" enctype="multipart/form-data">
 
-        <div id="dropZone-dt-header">
-          <i id="upload-icon" class="bi bi-file-earmark-arrow-up-fill"></i>
-          <label for="files" class="custom-file-upload-label">Choose or Drop SFTP File</label>
-          <input class="custom-file-upload" type="file" name="files-dt-sftp" id="files-dt-sftp" accept=".xlsx">
-        </div>
-        
-        <div id="dropZone-dt-header">
-          <i id="upload-icon" class="bi bi-file-earmark-arrow-up-fill"></i>
-          <label for="files" class="custom-file-upload-label">Choose or Drop Header File</label>
-          <input class="custom-file-upload" type="file" name="files-dt-header" id="files-dt-header" accept=".xlsx">
-
-        </div>
-
-        <ul id="fileList-dt-header"></ul>
-
-        <div id="progressContainer-dt-header" style="display:none;">
-          <div id="progressBar-dt-header"></div>
-        </div>
-        
-        <button id="process-btn" type="submit">Process File & Download</button>
-      </form>
-    </div>
-     -->
 <!-- =======================================================
      EXCEL MODIFY TOOL (SECOND FEATURE)
      ======================================================= -->
      <div id="modifyTool" class="tool-section">
 
-      <h2>Excel Modifier Tool</h2>
-      <p class="sub">Extract rows from Source → Insert into Target → Modify column → Remove duplicates</p>
+      <h2>D/T Header File</h2>
+      <p class="sub"> Drag and Drop SFTP and _DutiesHeader File to process data </p>
     
       <!-- DROP ZONE FOR SOURCE FILE -->
       <div id="sourceDropZone" class="drop-area">
-        <p>Drag & Drop Source Excel File Here</p>
+        <i id="upload-icon" class="bi bi-file-earmark-arrow-up-fill"></i>
+        <p>Drag & Drop SFTP File Here</p>
         <p>or click to select</p>
         <input type="file" id="sourceFileInput" accept=".xlsx" hidden />
       </div>
@@ -110,7 +104,8 @@
     
       <!-- DROP ZONE FOR TARGET FILE -->
       <div id="targetDropZone" class="drop-area">
-        <p>Drag & Drop Target Excel File Here</p>
+        <i id="upload-icon" class="bi bi-file-earmark-arrow-up-fill"></i>
+        <p>Drag & Drop Duties Header Here</p>
         <p>or click to select</p>
         <input type="file" id="targetFileInput" accept=".xlsx" hidden />
       </div>
@@ -118,26 +113,12 @@
     
       <hr>
     
-      <!-- MODIFY OPTIONS
-      <label>Select duplicate detection column:</label>
-      <input type="text" id="duplicateColumn" placeholder="e.g. Invoice No" />
-    
-      <label>Select column to modify:</label>
-      <input type="text" id="modifyColumn" placeholder="e.g. Amount" />
-    
-      <label>Modify rule (percentage):</label>
-      <input type="number" id="modifyPercent" placeholder="e.g. 10 for +10%" />
-     -->
       <button id="runModify" class="btn-primary">Run Modify Process</button>
-    
-      <div id="modifyReport" class="report-box"></div>
     
     </div>
   </main>
 
-  <div id="createdBy">
-    <h4>By </h4> <a href="_BLANK">Benjamin Perez</a>
-  </div>
+
  
 
   <script src="script.js"></script>
