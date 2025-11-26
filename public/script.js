@@ -11,7 +11,6 @@ function showDisplay(item){
   }
 }
 
-
 /*******************************************************************************
  *  CLIENT-SIDE EXCEL MERGER + ANALYZER
  *  - Processes XLSX files entirely in the browser
@@ -23,7 +22,7 @@ function showDisplay(item){
  *  - Creates downloadable merged.xlsx
  ******************************************************************************/
 
-// ========== DOM ELEMENTS FOR EXCEL MERGER ==========
+// ========== DOM ELEMENTS ==========
 const progressContainer = document.getElementById("progressContainer");
 const progressBar = document.getElementById("progressBar");
 const uploadForm = document.getElementById("uploadForm");
@@ -35,7 +34,7 @@ const fileList = document.getElementById("fileList");
 const fileCount = document.getElementById("fileCount");
 const reportDiv = document.getElementById("report");
 
-let DutiesHeaderFile = "";
+
 // =============================================================================
 //  Helper: Fake progress effect
 // =============================================================================
@@ -80,6 +79,7 @@ filesInput.addEventListener("change", () => {
   updateFileList(filesInput.files);
   fileCount.innerHTML = `${filesInput.files.length} files selected`;
 });
+
 
 // =============================================================================
 //  Drag and Drop Support
@@ -238,16 +238,7 @@ function exportMergedExcel(mergedData) {
   const ws = XLSX.utils.aoa_to_sheet(mergedData);
   XLSX.utils.book_append_sheet(wb, ws, "Merged");
 
-  const wbout = XLSX.write(wb, {
-    bookType: "xlsx",
-    type: "binary",
-    compression: true,  // zip compression enabled
-    WTF: false,
-    cellStyles: false,
-    cellNF: false,
-    cellDates: false,
-    bookSST: false,     // *** turn off shared strings ***
-  });
+  const wbout = XLSX.write(wb, { bookType: "xlsx", type: "binary" });
 
   function s2ab(s) {
     const buf = new ArrayBuffer(s.length);
@@ -331,6 +322,8 @@ resetBtn.addEventListener("click", () => {
   reportDiv.innerHTML = "";
 });
 
+
+
 /*****************************************************
  * FIXED: Excel Modify Tool - Client Side
  * - Fixes dropzone -> file flow
@@ -339,373 +332,220 @@ resetBtn.addEventListener("click", () => {
  * - Single Run button handler
  *****************************************************/
 
-/* ---------------- DOM (modify UI) ---------------- */
-const sourceDrop = document.getElementById("sourceDropZone");
-const sourceInput = document.getElementById("sourceFileInput");
-const sourceFileName = document.getElementById("sourceFileName");
-
-const targetDrop = document.getElementById("targetDropZone");
-const targetInput = document.getElementById("targetFileInput");
-const targetFileName = document.getElementById("targetFileName");
-
-const runModifyBtn = document.getElementById("runModify");
-const modifyReport = document.getElementById("modifyReport");
-
-// Keep global references in sync (set by dropzone)
-let sourceFile = null;
-let targetFile = null;
-
-/* ---------------- Dropzone Setup ----------------
-   Ensures both the hidden file input and the global
-   variable are set when user drops or selects file.
-*/
-function setupDropZone(dropArea, fileInput, fileNameDisplay, storageVarSetter) {
-  // dragover
-  dropArea.addEventListener("dragover", (e) => {
-    e.preventDefault();
-    dropArea.classList.add("dragover");
-  });
-
-  // dragleave
-  dropArea.addEventListener("dragleave", () => {
-    dropArea.classList.remove("dragover");
-  });
-
-  // drop
-  dropArea.addEventListener("drop", (e) => {
-    e.preventDefault();
-    dropArea.classList.remove("dragover");
-
-    const file = e.dataTransfer.files && e.dataTransfer.files[0];
-    if (!file) return;
-
-    // accept .xlsx only
-    if (!file.name.toLowerCase().endsWith(".xlsx")) {
-      alert("Please drop a .xlsx file");
-      return;
+/* ===========================================================================
+   EXCEL MODIFY TOOL (ISOLATED) — safe, no global collisions
+   - Wraps all code in an IIFE to prevent overriding merger helpers
+   - Uses unique function names (suffix _MOD)
+   - No accidental global writes
+   ========================================================================== */
+   (function ExcelModifyModule() {
+    // DOM (modify UI)
+    const sourceDrop_MOD = document.getElementById("sourceDropZone");
+    const sourceInput_MOD = document.getElementById("sourceFileInput");
+    const sourceFileName_MOD = document.getElementById("sourceFileName");
+  
+    const targetDrop_MOD = document.getElementById("targetDropZone");
+    const targetInput_MOD = document.getElementById("targetFileInput");
+    const targetFileName_MOD = document.getElementById("targetFileName");
+  
+    const runModifyBtn_MOD = document.getElementById("runModify");
+    const modifyReport_MOD = document.getElementById("modifyReport");
+  
+    // local references (no globals)
+    let sourceFile_MOD = null;
+    let targetFile_MOD = null;
+  
+    // Setup dropzone (isolated)
+    function setupDropZone_MOD(dropArea, fileInput, fileNameDisplay, storageSetter) {
+      dropArea.addEventListener("dragover", (e) => { e.preventDefault(); dropArea.classList.add("dragover"); });
+      dropArea.addEventListener("dragleave", () => dropArea.classList.remove("dragover"));
+      dropArea.addEventListener("drop", (e) => {
+        e.preventDefault(); dropArea.classList.remove("dragover");
+        const file = e.dataTransfer.files && e.dataTransfer.files[0];
+        if (!file) return;
+        if (!file.name.toLowerCase().endsWith(".xlsx")) { alert("Please drop a .xlsx file"); return; }
+        try { const dt = new DataTransfer(); dt.items.add(file); fileInput.files = dt.files; } catch (err) { console.warn("DT not allowed", err); }
+        storageSetter(file);
+        fileNameDisplay.textContent = file.name;
+      });
+      dropArea.addEventListener("click", () => fileInput.click());
+      fileInput.addEventListener("change", (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        if (!file.name.toLowerCase().endsWith(".xlsx")) { alert("Please select a .xlsx file"); e.target.value = ""; return; }
+        storageSetter(file);
+        fileNameDisplay.textContent = file.name;
+      });
     }
-
-    // set both the file input and the global var
-    try {
-      // set file input files using DataTransfer so .files is populated
-      const dt = new DataTransfer();
-      dt.items.add(file);
-      fileInput.files = dt.files;
-    } catch (err) {
-      // Some browsers don't allow constructing DataTransfer — still set global var
-      console.warn("Could not set fileInput.files programmatically", err);
+  
+    setupDropZone_MOD(sourceDrop_MOD, sourceInput_MOD, sourceFileName_MOD, (f) => { sourceFile_MOD = f; });
+    setupDropZone_MOD(targetDrop_MOD, targetInput_MOD, targetFileName_MOD, (f) => { targetFile_MOD = f; });
+  
+    // helper: normalize digits
+    function normalizeDigits_MOD(val) {
+      if (val === undefined || val === null) return "";
+      let s = String(val).trim();
+      s = s.replace(/[^\d]/g, "");
+      s = s.replace(/^0+/, "");
+      return s;
     }
-
-    storageVarSetter(file);
-    fileNameDisplay.textContent = file.name;
-    console.log("Dropzone set file:", file.name);
-  });
-
-  // click to open file chooser
-  dropArea.addEventListener("click", () => fileInput.click());
-
-  // when user selects via file picker
-  fileInput.addEventListener("change", (e) => {
-    const file = e.target.files && e.target.files[0];
-    if (!file) return;
-    if (!file.name.toLowerCase().endsWith(".xlsx")) {
-      alert("Please select a .xlsx file");
-      e.target.value = ""; // reset
-      return;
+  
+    // read file -> AoA (unique name)
+    async function readExcelFile_MOD(file) {
+      return new Promise((resolve, reject) => {
+        if (!file) return resolve([]); // return empty rather than reject (safer)
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          try {
+            const data = e.target.result;
+            const wb = XLSX.read(data, { type: "binary" });
+            const ws = wb.Sheets[wb.SheetNames[0]];
+            const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false });
+            resolve(rows);
+          } catch (err) { reject(err); }
+        };
+        reader.onerror = (err) => reject(err);
+        reader.readAsBinaryString(file);
+      });
     }
-    storageVarSetter(file);
-    fileNameDisplay.textContent = file.name;
-    DutiesHeaderFile = file.name;
-    console.log("File input set file:", file.name);
-  });
-}
-
-// initialize dropzones
-setupDropZone(sourceDrop, sourceInput, sourceFileName, (f) => sourceFile = f);
-setupDropZone(targetDrop, targetInput, targetFileName, (f) => targetFile = f);
-
-/***********************************************************************
- * Final Modify Tool (2-file flow) — Exact-match dedupe (normalized digits)
- * CCN source: Column H, start at row index 6 (H6 onward)
- * Source AC: column AC (index 28) starting at row index 3
- * Source AS: column AS (index 44) starting at row index 3
- *
- * Drop-in: paste into script.js after your dropzone + DOM setup.
- ***********************************************************************/
-
-/* DOM elements (must exist) */
-const sourceInputEl = document.getElementById("sourceFileInput");
-const targetInputEl = document.getElementById("targetFileInput");
-const runModifyButton = document.getElementById("runModify");
-const modifyReportEl = document.getElementById("modifyReport");
-
-/* helper: normalize to digits-only and strip leading zeros */
-function normalizeDigits(val) {
-  if (val === undefined || val === null) return "";
-  let s = String(val).trim();
-  s = s.replace(/[^\d]/g, ""); // digits only
-  s = s.replace(/^0+/, "");    // strip leading zeros
-  return s;
-}
-
-/* read file to AoA */
-async function readExcelFile(file) {
-  return new Promise((resolve, reject) => {
-    if (!file) return reject(new Error("No file provided"));
-    const reader = new FileReader();
-    reader.onload = (e) => {
+  
+    // download AoA (unique name)
+    function downloadAoA_MOD(rows, filename = "updated_target.xlsx") {
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+      const wbout = XLSX.write(wb, { bookType: "xlsx", type: "binary", compression: true, bookSST: false });
+      function s2ab(s) { const buf = new ArrayBuffer(s.length); const view = new Uint8Array(buf); for (let i = 0; i < s.length; i++) view[i] = s.charCodeAt(i) & 0xff; return buf; }
+      saveAs(new Blob([s2ab(wbout)], { type: "application/octet-stream" }), filename);
+    }
+  
+    // Core modify function (unique name)
+    async function modifyAndDownloadExactMatch_MOD({
+      sourceFileObj,
+      targetFileObj,
+      ccnColumnIndex = 7,
+      ccnStartRowIndex = 5,
+      sourceACStartIndex = 3,
+      sourceASStartIndex = 3
+    } = {}) {
       try {
-        const data = e.target.result;
-        const wb = XLSX.read(data, { type: "binary" });
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false });
-        resolve(rows);
+        if (!sourceFileObj || !targetFileObj) { alert("Please provide Source and Target files."); return; }
+  
+        const COL_AC = 28, COL_AS = 44;
+        const COL_A = 0, COL_B = 1, COL_C = 2, COL_D = 3, COL_E = 4, COL_F = 5, COL_H = 7;
+        const COL_J = 9, COL_K = 10, COL_Q = 16, COL_R = 17;
+  
+        // read files (use local read)
+        const tgtRows = await readExcelFile_MOD(targetFileObj);
+        const srcRows = await readExcelFile_MOD(sourceFileObj);
+  
+        const targetRows = Array.isArray(tgtRows) ? tgtRows : [];
+        const sourceRows = Array.isArray(srcRows) ? srcRows : [];
+  
+        // robust column width
+        let maxCols = 0;
+        for (const r of targetRows) if (Array.isArray(r)) maxCols = Math.max(maxCols, r.length);
+        const targetRowLen = Math.max(maxCols, COL_R + 1, COL_Q + 1, COL_J + 1, 30);
+  
+        // convert existing target J6->Q to numbers (in-place)
+        for (let r = 5; r < targetRows.length; r++) {
+          const row = targetRows[r] || [];
+          for (let c = 9; c <= 16; c++) {
+            let v = row[c];
+            if (v === undefined || v === null || v === "") continue;
+            let s = String(v).trim().replace(/,/g, "");
+            const num = parseFloat(s);
+            if (!isNaN(num)) row[c] = num;
+          }
+        }
+  
+        // extract CCNs
+        const refSet = new Set();
+        for (let r = ccnStartRowIndex; r < targetRows.length; r++) {
+          const row = targetRows[r] || [];
+          const cell = row[ccnColumnIndex];
+          if (cell === undefined || cell === null) continue;
+          const raw = String(cell).trim();
+          if (!raw) continue;
+          let cleaned = raw;
+          if (raw.startsWith("8308")) cleaned = raw.replace(/^8308/, "");
+          const norm = normalizeDigits_MOD(cleaned);
+          if (norm) refSet.add(norm);
+        }
+  
+        // source items
+        const sourceItems = [];
+        for (let r = sourceACStartIndex; r < sourceRows.length; r++) {
+          const row = sourceRows[r] || [];
+          const acRaw = (row[COL_AC] === undefined || row[COL_AC] === null) ? "" : String(row[COL_AC]).trim();
+          const asRaw = (row[COL_AS] === undefined || row[COL_AS] === null) ? "" : String(row[COL_AS]).trim();
+          if (acRaw === "" && asRaw === "") continue;
+          const acNorm = normalizeDigits_MOD(acRaw);
+          sourceItems.push({ rowIndex: r, acRaw, asRaw, acNorm });
+        }
+  
+        // last existing row for copying C-F
+        const lastExistingRow = targetRows.length ? targetRows[targetRows.length - 1] : [];
+  
+        // build inserted rows
+        const insertedRows = [];
+        let skippedExact = 0;
+        for (const item of sourceItems) {
+          if (item.acNorm && refSet.has(item.acNorm)) { skippedExact++; continue; }
+  
+          const newRow = new Array(targetRowLen).fill("");
+          newRow[COL_A] = "CLVS";
+          newRow[COL_B] = item.acRaw;
+          newRow[COL_H] = item.acRaw;
+          newRow[COL_C] = lastExistingRow[COL_C] ?? "";
+          newRow[COL_D] = lastExistingRow[COL_D] ?? "";
+          newRow[COL_E] = lastExistingRow[COL_E] ?? "";
+          newRow[COL_F] = lastExistingRow[COL_F] ?? "";
+          newRow[COL_J] = item.asRaw;
+          for (let c = COL_K; c <= COL_Q; c++) newRow[c] = 0;
+          newRow[COL_R] = "DDP";
+          insertedRows.push(newRow);
+        }
+  
+        // final AoA and convert J6->Q both existing+inserted
+        const finalAoA = targetRows.concat(insertedRows);
+        for (let r = 5; r < finalAoA.length; r++) {
+          const row = finalAoA[r] || [];
+          for (let c = 9; c <= 16; c++) {
+            let v = row[c];
+            if (v === undefined || v === null || v === "") continue;
+            let s = String(v).trim().replace(/,/g, "");
+            const num = parseFloat(s);
+            if (!isNaN(num)) row[c] = num;
+          }
+        }
+  
+        // download
+        downloadAoA_MOD(finalAoA, "updated_target.xlsx");
+  
+        if (modifyReport_MOD) {
+          modifyReport_MOD.innerHTML = `
+            <strong>Done</strong><br>
+            Source candidates: ${sourceItems.length}<br>
+            Inserted rows appended: ${insertedRows.length}<br>
+            Skipped (exact): ${skippedExact}<br>
+            Final rows (approx): ${finalAoA.length}
+          `;
+        }
+        console.log("modify complete (isolated).");
       } catch (err) {
-        reject(err);
-      }
-    };
-    reader.onerror = (err) => reject(err);
-    reader.readAsBinaryString(file);
-  });
-}
-
-/* safe download AoA */
-function downloadAoA(rows, filename = "updated_target.xlsx", targetRowsLength = 0) {
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.aoa_to_sheet(rows);
-
-  XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
-  const wbout = XLSX.write(wb, { bookType: "xlsx", type: "binary", compression: true, bookSST: false });
-
-  function s2ab(s) {
-    const buf = new ArrayBuffer(s.length);
-    const view = new Uint8Array(buf);
-    for (let i = 0; i < s.length; i++) view[i] = s.charCodeAt(i) & 0xff;
-    return buf;
-  }
-  saveAs(new Blob([s2ab(wbout)], { type: "application/octet-stream" }), filename);
-}
-
-/* find header row (optional; we won't rely on it for CCN extraction) */
-function findHeaderRowIndex(rows, fallback = 0) {
-  const keywords = ["Value for Duty", "Duty", "Brokerage Total", "Gov. Sales Tax", "Value"];
-  const limit = Math.min(rows.length, 12);
-  for (let i = 0; i < limit; i++) {
-    const row = rows[i] || [];
-    for (const cell of row) {
-      if (!cell) continue;
-      const s = String(cell);
-      for (const kw of keywords) if (s.includes(kw)) return i;
-    }
-  }
-  return fallback;
-}
-
-/* Core function: exact-match dedupe using Column H (index 7) starting at row index 6 */
-async function modifyAndDownloadExactMatch({
-  sourceFileObj,
-  targetFileObj,
-  // fixed indices per your spec:
-  ccnColumnIndex = 7,         // Column H
-  ccnStartRowIndex = 5,       // start scanning H6 onward (zero-based index 6)
-  sourceACStartIndex = 3,     // AC3 onward
-  sourceASStartIndex = 3,     // AS3 onward
-  suffixMatchLength = 0       // 0 = disabled (exact-match only)
-} = {}) {
-  if (!sourceFileObj || !targetFileObj) {
-    alert("Please provide Source and Target files.");
-    return;
-  }
-
-  // Column positions (zero-based)
-   // column indices
-   const COL_AC = 28;
-   const COL_AS = 44;
-   const COL_A  = 0;
-   const COL_B  = 1;
-   const COL_C  = 2;
-   const COL_D  = 3;
-   const COL_E  = 4;
-   const COL_F  = 5;
-   const COL_H  = 7;
-   const COL_J  = 9;
-   const COL_K  = 10;
-   const COL_Q  = 16;
-   const COL_R  = 17;
-
-  try {
-    // 1) read AoA for both files
-    console.log("Reading target (DutiesHeader)...");
-    const targetRows = await readExcelFile(targetFileObj); // AoA
-    console.log("Reading source...");
-    const sourceRows = await readExcelFile(sourceFileObj); // AoA
-
-        /**********************************************************************
-     * Convert EXISTING target rows J6 → Q(end) to true numbers
-     * (Excel Text-to-Columns behavior)
-     **********************************************************************/
-    for (let r = 5; r < targetRows.length; r++) {   // J6 = row index 5
-      const row = targetRows[r];
-      if (!row) continue;
-
-      for (let c = 9; c <= 16; c++) {              // J (9) → Q (16)
-        let v = row[c];
-        if (v === undefined || v === null) continue;
-
-        let s = String(v).trim();
-        s = s.replace(/,/g, "");   // remove thousand separators
-
-        const num = parseFloat(s);
-        if (!isNaN(num)) {
-          row[c] = num;            // store as NUMBER
-        }
+        console.error("modify error (isolated):", err);
+        alert("Error: " + (err && err.message ? err.message : err));
       }
     }
-
-
-
-    // 2) extract CCNs from Column H starting at row index 6
-    const refSet = new Set();
-    for (let r = ccnStartRowIndex; r < targetRows.length; r++) {
-      const row = targetRows[r] || [];
-      const cell = row[ccnColumnIndex];
-      if (cell === undefined || cell === null) continue;
-      const raw = String(cell).trim();
-      if (raw === "") continue;
-
-      // If starts with 8308 => remove only that prefix
-      let cleaned = raw;
-      if (raw.startsWith("8308")) cleaned = raw.replace(/^8308/, "");
-
-      const norm = normalizeDigits(cleaned);
-      if (norm) refSet.add(norm);
-    }
-    console.log("Extracted normalized CCNs (exact-match set size):", refSet.size);
-
-    // 3) build source items list (from AC3 & AS3 onward)
-    const sourceItems = [];
-    for (let r = sourceACStartIndex; r < sourceRows.length; r++) {
-      const row = sourceRows[r] || [];
-      const acRaw = (row[COL_AC] === undefined || row[COL_AC] === null) ? "" : String(row[COL_AC]).trim();
-      const asRaw = (row[COL_AS] === undefined || row[COL_AS] === null) ? "" : String(row[COL_AS]).trim();
-      if (acRaw === "" && asRaw === "") continue;
-      const acNorm = normalizeDigits(acRaw);
-      sourceItems.push({ rowIndex: r, acRaw, asRaw, acNorm });
-    }
-    console.log("Source candidate rows:", sourceItems.length);
-
-    // 4) Decide insert vs skip (exact-match only)
-    const headerIndex = findHeaderRowIndex ? findHeaderRowIndex(targetRows, 0) : 0;
-    const headerRow = targetRows[headerIndex] || [];
-    const targetRowLen = Math.max(headerRow.length, COL_R + 1, COL_Q + 1, COL_J + 1);
-
-    const insertedRows = [];
-    let skippedExact = 0;
-
-    const lastExistingRow = targetRows.length ? targetRows[targetRows.length - 1] : [];
-
-    for (const item of sourceItems) {
-      // if normalized AC empty -> current behaviour = insert. (Change to skip if desired)
-      
-
-      // exact normalized match -> skip
-      if (item.acNorm && refSet.has(item.acNorm)) {
-        skippedExact++;
-        continue;
-      }
-
-      // not matched -> insert
-      const newRow = new Array(targetRowLen).fill("");
-      newRow[0] = "CLVS";
-      newRow[COL_B] = item.acRaw;
-      newRow[COL_H] = item.acRaw;
-    
-      // Copy C-F from lastExistingRow
-      newRow[COL_C] = lastExistingRow[COL_C] ?? "";
-      newRow[COL_D] = lastExistingRow[COL_D] ?? "";
-      newRow[COL_E] = lastExistingRow[COL_E] ?? "";
-      newRow[COL_F] = lastExistingRow[COL_F] ?? "";
-      newRow[COL_J] = item.asRaw;
-      for (let c = COL_K; c <= COL_Q; c++) newRow[c] = 0;
-      newRow[COL_R] = "DDP";
-    
-      insertedRows.push(newRow);
-    }
-    console.log("Inserted rows:", insertedRows.length, "Skipped exact matches:", skippedExact);
-
-    // 5) Build final AoA by PRESERVING original target rows exactly, then appending inserted rows
-    const finalAoA = [].concat(targetRows, insertedRows);
-
-    // // 6) (Optional) trim trailing empty cells of inserted rows only to reduce file size
-    // function trimTrailingInsertedOnly(aoa) {
-    //   const trimmed = [];
-    //   for (let i = 0; i < aoa.length; i++) {
-    //     const row = aoa[i];
-    //     // If row index is in original target (i < targetRows.length) -> keep as-is
-    //     if (i < targetRows.length) {
-    //       trimmed.push(row);
-    //       continue;
-    //     }
-    //     // inserted rows: trim trailing empties
-    //     if (!Array.isArray(row)) {
-    //       trimmed.push(row);
-    //       continue;
-    //     }
-    //     let last = row.length - 1;
-    //     while (last >= 0 && (row[last] === "" || row[last] === undefined || row[last] === null)) last--;
-    //     trimmed.push(row.slice(0, last + 1));
-    //   }
-    //   return trimmed;
-    // }
-    // const compactAoA = trimTrailingInsertedOnly(finalAoA);
-
-        /**********************************************************************
-     * Convert ALL rows J6 → Q(end) to true numbers (existing + inserted)
-     * (Excel Text-to-Columns behavior for entire sheet)
-     **********************************************************************/
-    for (let r = 5; r < finalAoA.length; r++) {  // row index 5 = Excel row 6
-      const row = finalAoA[r];
-      if (!row) continue;
-
-      for (let c = 9; c <= 16; c++) {  // J(9) → Q(16)
-        let v = row[c];
-        if (v === undefined || v === null) continue;
-
-        let s = String(v).trim().replace(/,/g, "");
-
-        const num = parseFloat(s);
-        if (!isNaN(num)) {
-          row[c] = num;    // FINAL: numeric value
-        }
-      }
-    }
-
-
-    // 7) download
-    downloadAoA(finalAoA, "updated_target.xlsx", targetRows.length);
-
-    // 8) UI report
-    if (modifyReportEl) {
-      modifyReportEl.innerHTML = `
-        <strong>Done</strong><br>
-        Source candidates: ${sourceItems.length}<br>
-        Inserted rows appended: ${insertedRows.length}<br>
-        Skipped (exact): ${skippedExact}<br>
-        Final rows (approx): ${finalAoA.length}
-      `;
-    }
-
-    console.log("modifyAndDownloadExactMatch complete.");
-  } catch (err) {
-    console.error("Error in modifyAndDownloadExactMatch:", err);
-    alert("Error: " + (err && err.message ? err.message : err));
-  }
-}
-
-/* Wire Run button */
-runModifyButton.addEventListener("click", async () => {
-  const srcFile = sourceInputEl.files && sourceInputEl.files[0] ? sourceInputEl.files[0] : null;
-  const tgtFile = targetInputEl.files && targetInputEl.files[0] ? targetInputEl.files[0] : null;
-  console.log("Run: src =", srcFile && srcFile.name, "tgt =", tgtFile && tgtFile.name);
-  await modifyAndDownloadExactMatch({ sourceFileObj: srcFile, targetFileObj: tgtFile });
-});
+  
+    // wire button (use the isolated files)
+    runModifyBtn_MOD.addEventListener("click", async () => {
+      const src = sourceFile_MOD || (sourceInput_MOD.files && sourceInput_MOD.files[0]) || null;
+      const tgt = targetFile_MOD || (targetInput_MOD.files && targetInput_MOD.files[0]) || null;
+      console.log("Run modify (isolated), src:", src && src.name, "tgt:", tgt && tgt.name);
+      await modifyAndDownloadExactMatch_MOD({ sourceFileObj: src, targetFileObj: tgt });
+    });
+  
+  })(); // end IIFE
+  
