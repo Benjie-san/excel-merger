@@ -22,10 +22,6 @@ app.get("/", (req, res) => {
   res.render("index");
 });
 
-app.get("/api", (req, res) => {
-  res.json({ msg: "Hello world" });
-});
-
 app.listen(port, () =>
   console.log(`Static server running at http://localhost:${port}`)
 );
