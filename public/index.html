@@ -20,14 +20,12 @@
 
     <image height="80px" width="80px" src="./assets/acb-white.png"/>
     <hr>
-    <a id="link-merger" onclick="showDisplay(true)">Excel Merger</a>
+    <a id="link-merger" onclick="showDisplay('merger')">Excel Merger</a>
     <hr>
-    <a id="link-modifier" onclick="showDisplay(false)" >D/T Header file</a>
+    <a id="link-modifier" onclick="showDisplay('modify')" >D/T Header file</a>
     <hr>
-
-    <div id="createdBy">
-      <h4>By </h4> <a href="_BLANK">Benjamin Perez</a>
-    </div>
+    <a id="link-analyzer" onclick="showDisplay('analyzer')">Header/Item Analyzer</a>
+    <hr>
 
   </div>
 
@@ -37,77 +35,76 @@
     <div id="excel-merger">
       <h1>Excel Merger</h1>
       <form id="uploadForm" enctype="multipart/form-data">
+        <div class="merger-layout">
+          <div class="merger-main">
+            <div id="dropZone">
+              <i id="upload-icon" class="bi bi-file-earmark-arrow-up-fill"></i>
+              <p> Drag & Drop Excel files here<br>or <br>click below to select</p>
+              <label for="files" class="custom-file-upload-label">Choose Files</label>
+              <input class="custom-file-upload" type="file" name="files" id="files" multiple accept=".xlsx">
+              <span id="fileCount">No files selected</span>
+            </div>
 
-        <div id="dropZone">
-          
-          <i id="upload-icon" class="bi bi-file-earmark-arrow-up-fill"></i>
-         
-          <p> Drag & Drop Excel files here<br>or <br>click below to select</p>
-          <label for="files" class="custom-file-upload-label">Choose Files</label>
-          <input class="custom-file-upload" type="file" name="files" id="files" multiple accept=".xlsx">
-          <span id="fileCount">No files selected</span>
-        </div>
-  
-  
-        <ul id="fileList"></ul>
-  
-        <label id="add-filename">
-          <input type="checkbox" id="addFilename" />
-          <p>Add filename as first column</p>
-        </label>
-  
-        
-        <div id="progressContainer" style="display:none;">
-          <div id="progressBar"></div>
-        </div>
+            <div id="progressContainer" style="display:none;">
+              <div id="progressBar"></div>
+            </div>
 
-        <div id="slicing-options">
-          <h3>Slicing Options</h3>
-          <div>
-            <input type="radio" id="billingSlicing" name="slicing" value="billing" checked>
-            <label for="billingSlicing">Billing Slicing</label>
+            <ul id="fileList"></ul>
           </div>
-          <div>
-            <input type="radio" id="customSlicing" name="slicing" value="custom">
-            <label for="customSlicing">Custom Slicing</label>
-          </div>
-          <div id="customSlicingOptions" style="display:none;">
-            <label for="firstFileRows">Rows to remove from first file:</label>
-            <input type="number" id="firstFileRows" value="0" min="0">
-            <br>
-            <label for="restFileRows">Rows to remove from other files:</label>
-            <input type="number" id="restFileRows" value="0" min="0">
+
+          <div class="merger-divider" aria-hidden="true"></div>
+
+          <div class="merger-settings">
+            <label id="add-filename">
+              <input type="checkbox" id="addFilename" />
+              <p>Add filename as first column</p>
+            </label>
+
+            <div id="slicing-options">
+              <h3>Slicing Options</h3>
+              <div>
+                <input type="radio" id="billingSlicing" name="slicing" value="billing" checked>
+                <label for="billingSlicing">Billing Slicing</label>
+              </div>
+              <div>
+                <input type="radio" id="customSlicing" name="slicing" value="custom">
+                <label for="customSlicing">Custom Slicing</label>
+              </div>
+              <div id="customSlicingOptions" style="display:none;">
+                <label for="firstFileRows">Rows to remove from first file:</label>
+                <input type="number" id="firstFileRows" value="0" min="0">
+                <br>
+                <label for="restFileRows">Rows to remove from other files:</label>
+                <input type="number" id="restFileRows" value="0" min="0">
+              </div>
+            </div>
+
+            <hr>
+
+            <button id="merge-btn" type="submit">Merge</button>
+
+            <div id="result-btn">
+              <a id="downloadLink" style="display:none;"> Download Merged File</a>
+              <button id="resetBtn" type="button" style="display:none;">
+                <span class="material-symbols-outlined">
+                refresh
+                </span>
+                <p>Start Over</p>
+              </button>
+            </div>
+
+            <div id="report"></div>
           </div>
         </div>
-
-        <hr>
-        
-        <button id="merge-btn" type="submit">Merge</button>
-  
-       
       </form>
-      
-      <div id="result-btn">
-        <a id="downloadLink" style="display:none;"> Download Merged File</a>
   
-  
-        <button id="resetBtn" style="display:none;">
-          <span class="material-symbols-outlined">
-          refresh
-          </span>
-          <p>Start Over</p>
-        </button>
-      </div>
-  
-      <div id="report"></div>
-
     </div>
 
 
 <!-- =======================================================
      EXCEL MODIFY TOOL (SECOND FEATURE)
      ======================================================= -->
-     <div id="modifyTool" class="tool-section">
+    <div id="modifyTool" class="tool-section">
       <form id="modifyForm">
         <h2>D/T Header File</h2>
         <p class="sub"> Drag and Drop SFTP and _DutiesHeader File to process data </p>
@@ -134,8 +131,6 @@
       
         <button type="button" id="runModify" class="btn-primary">Run Modify Process</button>
 
-        <div id="modifyReport"></div>
-
         <div id="modify-result-btn">
           <button type="button" id="resetModifyBtn" style="display:none;">
             <span class="material-symbols-outlined">
@@ -146,11 +141,63 @@
         </div>
       </form>
     </div>
+
+    <!-- =======================================================
+         HEADER/ITEM ANALYZER (NEW FEATURE)
+         ======================================================= -->
+    <div id="analyzerTool" class="tool-section">
+      <form id="analyzerForm">
+        <h2>Header/Item Analyzer</h2>
+        <p class="sub"> Drag and Drop DutiesHeader file (DutiesItem optional) to analyze data </p>
+
+        <div class="analyzer-layout">
+          <div class="analyzer-main">
+            <!-- DROP ZONE FOR HEADER FILE -->
+            <div id="headerDropZone" class="drop-area">
+              <i id="upload-icon" class="bi bi-file-earmark-arrow-up-fill"></i>
+              <p>Drag & Drop DutiesHeader Here</p>
+              <p>or click to select</p>
+              <input type="file" id="headerFileInput" accept=".xlsx" hidden />
+            </div>
+            <p id="headerFileName" class="filename"></p>
+
+            <!-- DROP ZONE FOR ITEM FILE -->
+            <div id="itemDropZone" class="drop-area">
+              <i id="upload-icon" class="bi bi-file-earmark-arrow-up-fill"></i>
+              <p>Drag & Drop DutiesItem Here</p>
+              <p>or click to select</p>
+              <input type="file" id="itemFileInput" accept=".xlsx" hidden />
+            </div>
+            <p id="itemFileName" class="filename"></p>
+
+            <hr>
+
+            <button type="button" id="runAnalyze" class="btn-primary">Run Analysis</button>
+
+            <div id="analyze-result-btn">
+              <button type="button" id="resetAnalyzeBtn" style="display:none;">
+                <span class="material-symbols-outlined">
+                refresh
+                </span>
+                <p>Start Over</p>
+              </button>
+            </div>
+          </div>
+
+          <div class="analyzer-divider" aria-hidden="true"></div>
+
+          <div class="analyzer-report">
+            <div id="analyzeReport"></div>
+          </div>
+        </div>
+      </form>
+    </div>
   </main>
 
 
  
 
+  <button id="scrollTopBtn" type="button" aria-label="Scroll to top">↑</button>
   <script src="script.js"></script>
 </body>
 </html>

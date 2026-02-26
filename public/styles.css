@@ -18,6 +18,7 @@ body{
     background-color: #111827; /*Back drop*/
     color: white;
     font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    overflow-x: hidden;
 }
 
 body::-webkit-scrollbar {
@@ -78,12 +79,14 @@ main{
 
 #excel-merger, .tool-section{
   display: flex;
-  width: fit-content/50%;
+  width: 100%;
+  max-width: 1200px;
   gap: 5px;
   margin: 10px;
   background-color: #1f2937; /* main div bg */
   padding: 20px;
   border-radius: 10px;
+  box-sizing: border-box;
 }
 .tool-section{
   display: none;
@@ -99,7 +102,7 @@ main{
 }
 
 #dropZone, .drop-area {
-  width: 30vw;
+  width: min(520px, 100%);
   border: 2px dashed #aaa;
   border-radius: 10px;
   padding: 30px;
@@ -108,6 +111,80 @@ main{
   cursor: pointer;
   transition: background-color 0.2s, border-color 0.2s;
   gap:10px;
+  box-sizing: border-box;
+}
+
+.merger-layout {
+  display: flex;
+  gap: 25px;
+  align-items: flex-start;
+  width: 100%;
+}
+
+.merger-main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-right: 20px;
+  box-sizing: border-box;
+}
+
+.merger-divider {
+  width: 1px;
+  align-self: stretch;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.merger-settings {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 15px;
+  min-width: 240px;
+  max-width: 320px;
+  flex: 0 0 auto;
+  padding-left: 20px;
+  box-sizing: border-box;
+}
+
+.analyzer-layout {
+  display: flex;
+  gap: 25px;
+  align-items: flex-start;
+  width: 100%;
+}
+
+.analyzer-main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-right: 20px;
+  box-sizing: border-box;
+}
+
+.analyzer-divider {
+  width: 1px;
+  align-self: stretch;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.analyzer-report {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 240px;
+  max-width: 520px;
+  flex: 0 0 auto;
+  padding-left: 20px;
+  box-sizing: border-box;
+}
+
+#slicing-options {
+  width: 100%;
 }
 
 #dropZone.dragover, .drop-area.dragover {
@@ -119,7 +196,7 @@ main{
   display: none; /* Hides the default file input */
 } 
 
-.custom-file-upload-label, #merge-btn, #process-btn, #downloadLink, #resetBtn, #resetModifyBtn {
+.custom-file-upload-label, #merge-btn, #process-btn, #downloadLink, #resetBtn, #resetModifyBtn, #resetAnalyzeBtn {
   display: inline-block; /* Makes the label behave like a button*/
   background-color: #ff581f;
   color: white;
@@ -131,7 +208,8 @@ main{
 }
 
 #fileList, #fileList-dt-header {
-  width: fit-content;
+  width: 100%;
+  max-width: 520px;
   list-style-type: none;
   padding: 0;
   margin-top: 10px;
@@ -139,13 +217,16 @@ main{
 }
   
 #fileList li, #fileList-dt-header li {
-  width: 50vw;
+  width: 100%;
+  max-width: 520px;
   overflow: hidden;
   background: #111827;
   margin: 3px 0;
   padding: 6px 10px;
   border-radius: 6px;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 #add-filename{
@@ -177,14 +258,14 @@ input[type="checkbox"]:checked {
   transition: width 0.3s;
 }
 
-#result-btn, #modify-result-btn{
+#result-btn, #modify-result-btn, #analyze-result-btn{
   display: flex;
   justify-content: center;
   align-items: center;
-  flex-direction: start;
+  flex-direction: column;
   border-radius: 10px;
   gap: 10px;
-
+  width: 100%;
 }
 
 
@@ -196,13 +277,130 @@ input[type="checkbox"]:checked {
 }
 
 
-#resetBtn, #resetModifyBtn {
+#resetBtn, #resetModifyBtn, #resetAnalyzeBtn {
   background-color: #4b5563;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-direction: start;
   padding: 0px 10px;
+}
+
+#result-btn #downloadLink,
+#result-btn #resetBtn {
+  width: 100%;
+  justify-content: center;
+}
+
+#report {
+  width: 100%;
+  max-width: 320px;
+  margin-top: 5px;
+}
+
+#analyzeReport {
+  width: 100%;
+  margin-top: 10px;
+  padding: 12px;
+  background: #111827;
+  border-left: 4px solid #0070f3;
+  white-space: pre-wrap;
+}
+
+#analyzeReport p {
+  margin: 4px 0;
+}
+
+#analyzeReport h3 {
+  margin: 0 0 8px;
+}
+
+#analyzeReport h4 {
+  margin: 6px 0 4px;
+}
+
+.analyze-report-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.analyze-report-grid.header-only {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.analyze-report-col h4 {
+  margin-top: 0;
+}
+
+.analyze-report-compare {
+  margin-top: 10px;
+}
+
+#scrollTopBtn {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  background: #ff581f;
+  color: white;
+  border: none;
+  border-radius: 999px;
+  width: 44px;
+  height: 44px;
+  font-size: 20px;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(8px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+#scrollTopBtn.show {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+@media (max-width: 1000px) {
+  .merger-layout {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .merger-divider {
+    width: 100%;
+    height: 1px;
+  }
+
+  .merger-settings {
+    max-width: 520px;
+    width: 100%;
+  }
+
+  .analyzer-layout {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .analyzer-divider {
+    width: 100%;
+    height: 1px;
+  }
+
+  .analyzer-report {
+    max-width: 520px;
+    width: 100%;
+    padding-left: 0;
+  }
+
+  .analyzer-main {
+    padding-right: 0;
+  }
+
+  .analyze-report-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 #createdBy{
@@ -227,6 +425,13 @@ input[type="checkbox"]:checked {
     margin-top: 40px;
     padding: 40px;
     border-radius: 10px;
+  }
+
+  #modifyForm, #analyzerForm {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
   }
   
   .drop-area {
@@ -260,19 +465,16 @@ input[type="checkbox"]:checked {
     border: none;
     cursor: pointer;
     margin-top: 15px;
-    align-self: right;
+    align-self: center;
+    margin-bottom: 10px;
   }
   
   .btn-primary:hover {
     background: #0059c9;
   }
   
-  #modifyReport {
-    margin-top: 20px;
-    padding: 15px;
-    background: #111827;
-    border-left: 4px solid #0070f3;
-    white-space: pre-wrap;
+  #modify-result-btn, #analyze-result-btn {
+    margin-top: 10px;
   }
   
   hr {

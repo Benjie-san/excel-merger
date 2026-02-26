@@ -1,14 +1,17 @@
 //Toggle to show the section
 const excelMerger = document.getElementById("excel-merger");
 const DTHeaderFile = document.getElementById("modifyTool");
+const analyzerTool = document.getElementById("analyzerTool");
 
-function showDisplay(item){
-  if(item){
-    excelMerger.style.display = "flex";
-    DTHeaderFile.style.display = "none";
-  }else{
-    excelMerger.style.display = "none";
-    DTHeaderFile.style.display = "flex";
+function showDisplay(view){
+  let mode = view;
+  if (view === true) mode = "merger";
+  if (view === false) mode = "modify";
+
+  excelMerger.style.display = mode === "merger" ? "flex" : "none";
+  DTHeaderFile.style.display = mode === "modify" ? "flex" : "none";
+  if (analyzerTool) {
+    analyzerTool.style.display = mode === "analyzer" ? "flex" : "none";
   }
 }
 
@@ -39,6 +42,7 @@ const customSlicingRadio = document.getElementById("customSlicing");
 const customSlicingOptions = document.getElementById("customSlicingOptions");
 const firstFileRowsInput = document.getElementById("firstFileRows");
 const restFileRowsInput = document.getElementById("restFileRows");
+const scrollTopBtn = document.getElementById("scrollTopBtn");
 
 // ========== EVENT LISTENERS ==========
 
@@ -53,6 +57,21 @@ customSlicingRadio.addEventListener("change", () => {
     customSlicingOptions.style.display = "block";
   }
 });
+
+// Scroll-to-top button
+if (scrollTopBtn) {
+  window.addEventListener("scroll", () => {
+    if (window.scrollY > 300) {
+      scrollTopBtn.classList.add("show");
+    } else {
+      scrollTopBtn.classList.remove("show");
+    }
+  });
+
+  scrollTopBtn.addEventListener("click", () => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+}
 
 
 // =============================================================================
@@ -266,8 +285,33 @@ function forceGeneralNumber(ws, r, c, value) {
   ws[ref] = {
     t: "n",
     v: value,
-    z: "0"       // TRUE GENERAL numeric (no currency)
+    z: "General" // General numeric (no currency)
   };
+}
+
+function parseNumberFromCell(value) {
+  if (value === undefined || value === null) return null;
+  let s = String(value).trim();
+  if (s === "") return null;
+  if (/^\$?\s*-\s*\$?$/.test(s)) return 0;
+
+  let neg = false;
+  if (s.startsWith("(") && s.endsWith(")")) {
+    neg = true;
+    s = s.slice(1, -1);
+  }
+  if (s.endsWith("-")) {
+    neg = true;
+    s = s.slice(0, -1);
+  }
+
+  s = s.replace(/[$,]/g, "").replace(/\s+/g, "");
+  if (s === "") return null;
+  if (s === "-") return 0;
+
+  const num = parseFloat(s);
+  if (isNaN(num)) return null;
+  return neg ? -num : num;
 }
 
 function convertColumnRangeToNumbers(aoa, startRow, colStart, colEnd, ws) {
@@ -276,15 +320,12 @@ function convertColumnRangeToNumbers(aoa, startRow, colStart, colEnd, ws) {
     if (!row) continue;
 
     for (let c = colStart; c <= colEnd; c++) {
-      let v = row[c];
-      if (v === undefined || v === null || v === "") continue;
+      const v = row[c];
+      const num = parseNumberFromCell(v);
 
-      let s = String(v).trim().replace(/,/g, "");
-      const num = parseFloat(s);
-
-      if (!isNaN(num)) {
+      if (num !== null) {
         aoa[r][c] = num;          // update AoA
-        forceGeneralNumber(ws, r, c, num); // override Excel’s formatting
+        forceGeneralNumber(ws, r, c, num); // override Excel formatting
       }
     }
   }
@@ -306,9 +347,17 @@ function exportMergedExcel(mergedData) {
   // row 1 downward (because you removed first 5 rows earlier)
   const startRow = 1;
 
-  // DutiesHeader → convert J (9) to Q (16)
+  // DutiesHeader -> convert Value for Duty -> Exchange Rate when available
   if (headerMode) {
-    convertColumnRangeToNumbers(aoa, startRow, 9, 16, ws);
+    const headers = aoa[0] || [];
+    const startIdx = headers.indexOf("Value for Duty");
+    const endIdx = headers.indexOf("Exchange Rate");
+    if (startIdx !== -1 && endIdx !== -1 && startIdx <= endIdx) {
+      convertColumnRangeToNumbers(aoa, startRow, startIdx, endIdx, ws);
+    } else {
+      // fallback to J (9) -> Q (16)
+      convertColumnRangeToNumbers(aoa, startRow, 9, 16, ws);
+    }
   }
 
   // DutiesItem → convert only Duty + GST
@@ -456,7 +505,6 @@ function generateTimestamp12() {
   const targetFileName = document.getElementById("targetFileName");
 
   const runModifyBtn = document.getElementById("runModify");
-  const modifyReportEl = document.getElementById("modifyReport");
   const resetModifyBtn = document.getElementById("resetModifyBtn");
 
   /* -------------------------
@@ -522,7 +570,32 @@ function generateTimestamp12() {
   // force a worksheet cell to numeric general
   function setWorksheetNumber(ws, r, c, value) {
     const ref = XLSX.utils.encode_cell({ r, c });
-    ws[ref] = { t: "n", v: value, z: "0" };
+    ws[ref] = { t: "n", v: value, z: "General" };
+  }
+
+  function parseNumberFromCell_MOD(value) {
+    if (value === undefined || value === null) return null;
+    let s = String(value).trim();
+    if (s === "") return null;
+    if (/^\$?\s*-\s*\$?$/.test(s)) return 0;
+
+    let neg = false;
+    if (s.startsWith("(") && s.endsWith(")")) {
+      neg = true;
+      s = s.slice(1, -1);
+    }
+    if (s.endsWith("-")) {
+      neg = true;
+      s = s.slice(0, -1);
+    }
+
+    s = s.replace(/[$,]/g, "").replace(/\s+/g, "");
+    if (s === "") return null;
+    if (s === "-") return 0;
+
+    const num = parseFloat(s);
+    if (isNaN(num)) return null;
+    return neg ? -num : num;
   }
 
   // find last non-empty row in AoA (search from bottom)
@@ -554,8 +627,8 @@ function generateTimestamp12() {
     targetFileObj,
     ccnColumnIndex = 7,        // H
     ccnStartRowIndex = 5,      // H6 -> index 5
-    sourceACStartIndex = 3,    // AC3 -> index 3
-    sourceASStartIndex = 3     // AS3 -> index 3
+    sourceACStartIndex = 2,    // AC3 -> index 2
+    sourceASStartIndex = 2     // AS3 -> index 2
   } = {}) {
     try {
       if (!sourceFileObj || !targetFileObj) { alert("Please provide Source and Target files."); return; }
@@ -574,10 +647,17 @@ function generateTimestamp12() {
       const targetRows = Array.isArray(tgtRows) ? tgtRows : [];
       const sourceRows = Array.isArray(srcRows) ? srcRows : [];
 
+      // Find last data row; we'll insert new rows *before* trailing blanks
+      const lastNonEmptyIndex = findLastNonEmptyRow(targetRows);
+      const dataTargetRows = lastNonEmptyIndex >= 0
+        ? targetRows.slice(0, lastNonEmptyIndex + 1)
+        : targetRows;
+      console.log("Target rows (raw):", targetRows.length, "data:", dataTargetRows.length);
+
       // build refSet from target H (exact cleaned strings)
       const refSet = new Set();
-      for (let r = ccnStartRowIndex; r < targetRows.length; r++) {
-        const row = targetRows[r] || [];
+      for (let r = ccnStartRowIndex; r < dataTargetRows.length; r++) {
+        const row = dataTargetRows[r] || [];
         const raw = row[ccnColumnIndex];
         if (raw === undefined || raw === null) continue;
         const cleaned = cleanTargetCCN(raw);
@@ -587,23 +667,27 @@ function generateTimestamp12() {
 
       // build source items (keep AC as EXACT trimmed string)
       const sourceItems = [];
+      const sourceSeen = new Set();
       for (let r = sourceACStartIndex; r < sourceRows.length; r++) {
         const row = sourceRows[r] || [];
         const acRaw = (row[COL_AC] === undefined || row[COL_AC] === null) ? "" : String(row[COL_AC]).trim();
         const asRaw = (row[COL_AS] === undefined || row[COL_AS] === null) ? "" : String(row[COL_AS]).trim();
         if (acRaw === "" && asRaw === "") continue;
+        if (acRaw !== "") {
+          if (sourceSeen.has(acRaw)) continue;
+          sourceSeen.add(acRaw);
+        }
         sourceItems.push({ rowIndex: r, acRaw, asRaw });
       }
       console.log("sourceItems:", sourceItems.length);
 
-      // determine copy-from row for C-F: last non-empty row in targetRows
-      const lastNonEmptyIndex = findLastNonEmptyRow(targetRows);
-      const lastExistingRow = lastNonEmptyIndex >= 0 ? targetRows[lastNonEmptyIndex] : [];
+      // determine copy-from row for C-F: last non-empty row in trimmed target
+      const lastExistingRow = lastNonEmptyIndex >= 0 ? dataTargetRows[lastNonEmptyIndex] : [];
 
       // prepare inserted rows array
       // targetRowLen: base width derived from header or safe default
       const headerIndex = 0;
-      const headerRow = targetRows[headerIndex] || [];
+      const headerRow = dataTargetRows[headerIndex] || [];
       const targetRowLen = Math.max(headerRow.length, COL_R + 1, COL_Q + 1, COL_J + 1, 25);
 
       const insertedRows = [];
@@ -644,22 +728,30 @@ function generateTimestamp12() {
       console.log("Inserted:", insertedRows.length, "Skipped:", skippedExact);
 
       // Build final AoA (preserve original target rows, then appended inserted rows)
-      const finalAoA = targetRows.concat(insertedRows);
+      const insertAt = lastNonEmptyIndex >= 0 ? lastNonEmptyIndex + 1 : 0;
+      const finalAoA = targetRows
+        .slice(0, insertAt)
+        .concat(insertedRows, targetRows.slice(insertAt));
 
       // Create workbook and worksheet from finalAoA
       const wb = XLSX.utils.book_new();
       const ws = XLSX.utils.aoa_to_sheet(finalAoA);
 
-      // Convert J(9) -> Q(16) to numbers starting at row index 5 (Excel row 6)
+      // Convert Value for Duty -> Exchange Rate to numbers starting at row index 5 (Excel row 6)
       const startIndex = 5;
+      const headerRowFinal = finalAoA[0] || [];
+      let colStart = headerRowFinal.indexOf("Value for Duty");
+      let colEnd = headerRowFinal.indexOf("Exchange Rate");
+      if (colStart === -1 || colEnd === -1 || colStart > colEnd) {
+        colStart = 9;
+        colEnd = 16;
+      }
       for (let r = startIndex; r < finalAoA.length; r++) {
         const row = finalAoA[r] || [];
-        for (let c = 9; c <= 16; c++) {
+        for (let c = colStart; c <= colEnd; c++) {
           const rawVal = row[c];
-          if (rawVal === undefined || rawVal === null || rawVal === "") continue;
-          const s = String(rawVal).trim().replace(/,/g, "");
-          const num = parseFloat(s);
-          if (!isNaN(num)) {
+          const num = parseNumberFromCell_MOD(rawVal);
+          if (num !== null) {
             // update worksheet cell as number and force General numeric format
             setWorksheetNumber(ws, r, c, num);
             // also update AoA to keep consistent (optional)
@@ -694,16 +786,6 @@ function generateTimestamp12() {
       saveAs(new Blob([s2ab(wbout)], { type: "application/octet-stream" }), outName);
 
       // UI report
-      if (modifyReportEl) {
-        modifyReportEl.innerHTML = `
-          <strong>Done</strong><br>
-          Source candidates: ${sourceItems.length}<br>
-          Inserted rows appended: ${insertedRows.length}<br>
-          Skipped (exact): ${skippedExact}<br>
-          Final rows (approx): ${finalAoA.length}
-        `;
-      }
-      
       if (resetModifyBtn) {
         resetModifyBtn.style.display = 'flex';
       }
@@ -732,9 +814,6 @@ function generateTimestamp12() {
     if(sourceFileName) sourceFileName.textContent = "";
     if(targetFileName) targetFileName.textContent = "";
 
-    // Clear the report
-    if(modifyReportEl) modifyReportEl.innerHTML = "";
-
     // Hide the reset button
     resetModifyBtn.style.display = "none";
 
@@ -742,3 +821,426 @@ function generateTimestamp12() {
   });
 
 })(); // end IIFE
+
+/**************************************************************
+ * Header/Item Analyzer Module (UI Only)
+ * - Accepts DutiesHeader + DutiesItem files
+ * - Shows placeholder report until analysis rules are provided
+ **************************************************************/
+(function HeaderItemAnalyzerModule() {
+  const analyzerForm = document.getElementById("analyzerForm");
+  const headerDrop = document.getElementById("headerDropZone");
+  const headerInput = document.getElementById("headerFileInput");
+  const headerFileName = document.getElementById("headerFileName");
+
+  const itemDrop = document.getElementById("itemDropZone");
+  const itemInput = document.getElementById("itemFileInput");
+  const itemFileName = document.getElementById("itemFileName");
+
+  const runAnalyzeBtn = document.getElementById("runAnalyze");
+  const analyzeReportEl = document.getElementById("analyzeReport");
+  const resetAnalyzeBtn = document.getElementById("resetAnalyzeBtn");
+
+  if (!analyzerForm || !headerDrop || !headerInput || !itemDrop || !itemInput) return;
+
+  function setupDropZone_AN(dropArea, fileInput, fileNameDisplay) {
+    dropArea.addEventListener("dragover", (e) => { e.preventDefault(); dropArea.classList.add("dragover"); });
+    dropArea.addEventListener("dragleave", () => dropArea.classList.remove("dragover"));
+    dropArea.addEventListener("drop", (e) => {
+      e.preventDefault(); dropArea.classList.remove("dragover");
+      const f = e.dataTransfer.files && e.dataTransfer.files[0];
+      if (!f) return;
+      if (!f.name.toLowerCase().endsWith(".xlsx")) { alert("Please drop a .xlsx file"); return; }
+      try { const dt = new DataTransfer(); dt.items.add(f); fileInput.files = dt.files; } catch (err) { /*ignore*/ }
+      if (fileNameDisplay) fileNameDisplay.textContent = f.name;
+    });
+    dropArea.addEventListener("click", () => fileInput.click());
+    fileInput.addEventListener("change", (e) => {
+      const f = e.target.files && e.target.files[0]; if (!f) return;
+      if (!f.name.toLowerCase().endsWith(".xlsx")) { alert("Please select a .xlsx file"); e.target.value = ""; return; }
+      if (fileNameDisplay) fileNameDisplay.textContent = f.name;
+    });
+  }
+
+  setupDropZone_AN(headerDrop, headerInput, headerFileName);
+  setupDropZone_AN(itemDrop, itemInput, itemFileName);
+
+  function renderAnalyzerReport(data) {
+    if (!analyzeReportEl) return;
+    const safe = (v) => (v === undefined || v === null ? "-" : v);
+    const header = data.header || {};
+    const item = data.item || {};
+    const compare = data.compare || {};
+    const itemAvailable = !!data.itemAvailable;
+    analyzeReportEl.innerHTML = `
+      <div class="analyze-report-grid header-only">
+        <div class="analyze-report-col">
+          <h4>Header File</h4>
+          <p><b>Total CCNs:</b> ${safe(header.totalCCNs)}</p>
+          <p><b>Total CLVS:</b> ${safe(header.totalCLVS)}</p>
+          <p><b>Total LVS:</b> ${safe(header.totalLVS)}</p>
+          <p><b>Total PGA:</b> ${safe(header.totalPGA)}</p>
+          <p><b>Empty Brokerage Fee (CCNs):</b></p>
+          <p>${safe(header.emptyBrokerageCCNs)}</p>
+        </div>
+        <div class="analyze-report-col">
+          <h4>Exceptions</h4>
+          <p><b>Empty Value for Duty (CCNs):</b></p>
+          <p>${safe(header.emptyValueForDutyCCNs)}</p>
+          <p><b>GST = 0 with Value for Duty threshold (CCNs):</b></p>
+          <p>${safe(header.gstZeroCCNs)}</p>
+          <p><b>Value for Duty &lt; 20 with Duty/GST &gt; 0 (CCNs):</b></p>
+          <p>${safe(header.lowValueDutyCCNs)}</p>
+        </div>
+      </div>
+      ${
+        itemAvailable
+          ? `
+      <hr>
+      <div class="analyze-report-compare">
+        <h4>Totals Match</h4>
+        <p><b>Duty Totals:</b> ${safe(compare.duty)}</p>
+        <p><b>GST Totals:</b> ${safe(compare.gst)}</p>
+      </div>
+      `
+          : ""
+      }
+    `;
+  }
+
+  function readExcelFile_AN(file) {
+    return new Promise((resolve, reject) => {
+      if (!file) return resolve([]);
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = e.target.result;
+          const wb = XLSX.read(data, { type: "binary" });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false });
+          resolve(rows);
+        } catch (err) {
+          reject(err);
+        }
+      };
+      reader.onerror = (err) => reject(err);
+      reader.readAsBinaryString(file);
+    });
+  }
+
+  function findHeaderRow(rows) {
+    const maxScan = Math.min(rows.length, 15);
+    let bestIndex = 0;
+    let bestScore = -1;
+    for (let r = 0; r < maxScan; r++) {
+      const row = rows[r] || [];
+      const textRow = row.map(v => String(v || "").trim().toLowerCase());
+      const score =
+        (textRow.some(v => v.includes("ccn")) ? 1 : 0) +
+        (textRow.some(v => v.includes("brokerage")) ? 1 : 0) +
+        (textRow.some(v => v.includes("value for duty")) ? 1 : 0) +
+        (textRow.some(v => v.includes("gov. sales")) || textRow.some(v => v.includes("gst")) ? 1 : 0);
+      if (score > bestScore) {
+        bestScore = score;
+        bestIndex = r;
+      }
+    }
+    return bestScore > 0 ? bestIndex : 0;
+  }
+
+  function findColumnIndex(headers, matchers) {
+    for (let i = 0; i < headers.length; i++) {
+      const cell = String(headers[i] || "").trim().toLowerCase();
+      if (!cell) continue;
+      if (matchers.some(m => m.test(cell))) return i;
+    }
+    return -1;
+  }
+
+  function findDutyColumnIndex(headers) {
+    let fallback = -1;
+    for (let i = 0; i < headers.length; i++) {
+      const cell = String(headers[i] || "").trim().toLowerCase();
+      if (!cell) continue;
+      if (cell.includes("value for duty")) continue;
+      if (cell === "duty") return i;
+      if (cell.includes("duty rate")) continue;
+      if (cell.includes("duty") && fallback === -1) fallback = i;
+    }
+    return fallback;
+  }
+
+  function isEmptyCell(v) {
+    return v === undefined || v === null || String(v).trim() === "";
+  }
+
+  function approxEqual(a, b, eps = 1e-4) {
+    return Math.abs(a - b) <= eps;
+  }
+
+  function formatNumber(n) {
+    if (n === undefined || n === null || isNaN(n)) return "-";
+    return Number(n).toFixed(2);
+  }
+
+  function analyzeDutiesRows(rows, { hasBrokerage }) {
+    const headerRowIndex = findHeaderRow(rows);
+    const headers = rows[headerRowIndex] || [];
+    const dataRows = rows.slice(headerRowIndex + 1);
+
+    const ccnIdx = findColumnIndex(headers, [/ccn/i]);
+    const brokerageIdx = hasBrokerage ? findColumnIndex(headers, [/brokerage/i]) : -1;
+    const valueForDutyIdx = findColumnIndex(headers, [/value for duty/i]);
+    const dutyIdx = findDutyColumnIndex(headers);
+    const gstIdx = findColumnIndex(headers, [/gov\.?\s*sales/i, /\bgst\b/i]);
+
+    const missing = [];
+    if (ccnIdx === -1) missing.push("CCN");
+    if (valueForDutyIdx === -1) missing.push("Value for Duty");
+    if (dutyIdx === -1) missing.push("Duty");
+    if (gstIdx === -1) missing.push("GST");
+    if (hasBrokerage && brokerageIdx === -1) missing.push("Brokerage");
+    if (missing.length) {
+      return { error: `Missing columns: ${missing.join(", ")}` };
+    }
+
+    const clvsValues = [0.0175, 0.35, 0.085];
+    const lvsValues = [0.28, 0.35];
+    const pgaValues = [0.71, 0.5, 0.6, 2.25];
+
+    const uniqueCCNs = new Set();
+    let totalCLVS = 0;
+    let totalLVS = 0;
+    let totalPGA = 0;
+
+    let totalDuty = 0;
+    let totalGST = 0;
+
+    const emptyBrokerageSet = new Set();
+    const emptyValueForDutySet = new Set();
+    const gstZeroSet = new Set();
+    const lowValueDutySet = new Set();
+
+    for (const row of dataRows) {
+      if (!row) continue;
+      const ccnRaw = row[ccnIdx];
+      const ccn = ccnRaw === undefined || ccnRaw === null ? "" : String(ccnRaw).trim();
+      if (ccn !== "") uniqueCCNs.add(ccn);
+
+      const brokerageRaw = hasBrokerage ? row[brokerageIdx] : null;
+      const valueForDutyRaw = row[valueForDutyIdx];
+      const dutyRaw = row[dutyIdx];
+      const gstRaw = row[gstIdx];
+
+      if (hasBrokerage && isEmptyCell(brokerageRaw) && ccn) {
+        emptyBrokerageSet.add(ccn);
+      }
+
+      if (isEmptyCell(valueForDutyRaw) && ccn) {
+        emptyValueForDutySet.add(ccn);
+      }
+
+      const brokerageVal = hasBrokerage ? parseNumberFromCell(brokerageRaw) : null;
+      const valueForDutyVal = parseNumberFromCell(valueForDutyRaw);
+      const dutyVal = parseNumberFromCell(dutyRaw);
+      const gstVal = parseNumberFromCell(gstRaw);
+
+      if (hasBrokerage && brokerageVal !== null) {
+        if (clvsValues.some(v => approxEqual(brokerageVal, v))) totalCLVS++;
+        if (lvsValues.some(v => approxEqual(brokerageVal, v))) totalLVS++;
+        if (pgaValues.some(v => approxEqual(brokerageVal, v))) totalPGA++;
+      }
+
+      if (dutyVal !== null) totalDuty += dutyVal;
+      if (gstVal !== null) totalGST += gstVal;
+
+      if (gstVal !== null && approxEqual(gstVal, 0) && valueForDutyVal !== null) {
+        const isPga225 = hasBrokerage && brokerageVal !== null && approxEqual(brokerageVal, 2.25);
+        const threshold = isPga225 ? 40.1 : 20.1;
+        if (valueForDutyVal > threshold && ccn) {
+          gstZeroSet.add(ccn);
+        }
+      }
+
+      if (valueForDutyVal !== null && valueForDutyVal < 20) {
+        const hasDutyOrGst = (dutyVal !== null && Math.abs(dutyVal) > 0) || (gstVal !== null && Math.abs(gstVal) > 0);
+        if (hasDutyOrGst && ccn) {
+          lowValueDutySet.add(ccn);
+        }
+      }
+    }
+
+    return {
+      totalCCNs: uniqueCCNs.size,
+      totalCLVS: hasBrokerage ? totalCLVS : "-",
+      totalLVS: hasBrokerage ? totalLVS : "-",
+      totalPGA: hasBrokerage ? totalPGA : "-",
+      totalDuty: formatNumber(totalDuty),
+      totalGST: formatNumber(totalGST),
+      totalDutyValue: totalDuty,
+      totalGSTValue: totalGST,
+      emptyBrokerageCCNs: hasBrokerage ? (emptyBrokerageSet.size ? Array.from(emptyBrokerageSet).join(", ") : "-") : "-",
+      emptyValueForDutyCCNs: emptyValueForDutySet.size ? Array.from(emptyValueForDutySet).join(", ") : "-",
+      gstZeroCCNs: gstZeroSet.size ? Array.from(gstZeroSet).join(", ") : "-",
+      lowValueDutyCCNs: lowValueDutySet.size ? Array.from(lowValueDutySet).join(", ") : "-"
+    };
+  }
+
+  function emptyItemStats() {
+    return {
+      totalCCNs: "-",
+      totalDuty: "-",
+      totalGST: "-",
+      totalDutyValue: null,
+      totalGSTValue: null,
+      emptyValueForDutyCCNs: "-",
+      gstZeroCCNs: "-",
+      lowValueDutyCCNs: "-"
+    };
+  }
+
+  // Initial empty report
+  renderAnalyzerReport({
+    header: {
+      totalCCNs: "",
+      totalCLVS: "",
+      totalLVS: "",
+      totalPGA: "",
+      totalDuty: "",
+      totalGST: "",
+      totalDutyValue: null,
+      totalGSTValue: null,
+      emptyBrokerageCCNs: "",
+      emptyValueForDutyCCNs: "",
+      gstZeroCCNs: "",
+      lowValueDutyCCNs: ""
+    },
+    item: {
+      totalCCNs: "",
+      totalDuty: "",
+      totalGST: "",
+      totalDutyValue: null,
+      totalGSTValue: null,
+      emptyValueForDutyCCNs: "",
+      gstZeroCCNs: "",
+      lowValueDutyCCNs: ""
+    },
+    compare: {
+      duty: "",
+      gst: ""
+    },
+    itemAvailable: false
+  });
+
+  if (runAnalyzeBtn) {
+    runAnalyzeBtn.addEventListener("click", async () => {
+      const headerFile = headerInput.files && headerInput.files[0] ? headerInput.files[0] : null;
+      const itemFile = itemInput.files && itemInput.files[0] ? itemInput.files[0] : null;
+      if (!headerFile) {
+        alert("Please provide a DutiesHeader file.");
+        return;
+      }
+
+      try {
+        const headerRows = await readExcelFile_AN(headerFile);
+        if (!headerRows.length) {
+          alert("Header file appears to be empty.");
+          return;
+        }
+
+        const headerStats = analyzeDutiesRows(headerRows, { hasBrokerage: true });
+        if (headerStats.error) {
+          alert(`Header file issue: ${headerStats.error}`);
+          return;
+        }
+
+        let itemStats = emptyItemStats();
+        if (itemFile) {
+          const itemRows = await readExcelFile_AN(itemFile);
+          if (!itemRows.length) {
+            alert("Item file appears to be empty.");
+            return;
+          }
+          itemStats = analyzeDutiesRows(itemRows, { hasBrokerage: false });
+          if (itemStats.error) {
+            alert(`Item file issue: ${itemStats.error}`);
+            return;
+          }
+        }
+
+        const dutyHeader = headerStats.totalDutyValue;
+        const dutyItem = itemStats.totalDutyValue;
+        const gstHeader = headerStats.totalGSTValue;
+        const gstItem = itemStats.totalGSTValue;
+        const tol = 0.01;
+
+        const dutyMatch = dutyHeader !== null && dutyItem !== null && Math.abs(dutyHeader - dutyItem) <= tol;
+        const gstMatch = gstHeader !== null && gstItem !== null && Math.abs(gstHeader - gstItem) <= tol;
+
+        renderAnalyzerReport({
+          header: headerStats,
+          item: itemStats,
+          compare: {
+            duty: itemFile
+              ? `Header ${headerStats.totalDuty} vs Item ${itemStats.totalDuty} (${dutyMatch ? "Matched" : "Not Matched"})`
+              : "Item file not provided",
+            gst: itemFile
+              ? `Header ${headerStats.totalGST} vs Item ${itemStats.totalGST} (${gstMatch ? "Matched" : "Not Matched"})`
+              : "Item file not provided"
+          },
+          itemAvailable: !!itemFile
+        });
+
+        if (resetAnalyzeBtn) {
+          resetAnalyzeBtn.style.display = "flex";
+        }
+      } catch (err) {
+        console.error("Analyzer error:", err);
+        alert("Analyzer error: " + (err && err.message ? err.message : err));
+      }
+    });
+  }
+
+  if (resetAnalyzeBtn) {
+    resetAnalyzeBtn.addEventListener("click", () => {
+      analyzerForm.reset();
+      if (headerFileName) headerFileName.textContent = "";
+      if (itemFileName) itemFileName.textContent = "";
+      renderAnalyzerReport({
+        header: {
+          totalCCNs: "",
+          totalCLVS: "",
+          totalLVS: "",
+          totalPGA: "",
+          totalDuty: "",
+          totalGST: "",
+          totalDutyValue: null,
+          totalGSTValue: null,
+          emptyBrokerageCCNs: "",
+          emptyValueForDutyCCNs: "",
+          gstZeroCCNs: "",
+          lowValueDutyCCNs: ""
+        },
+        item: {
+          totalCCNs: "",
+          totalDuty: "",
+          totalGST: "",
+          totalDutyValue: null,
+          totalGSTValue: null,
+          emptyValueForDutyCCNs: "",
+          gstZeroCCNs: "",
+          lowValueDutyCCNs: ""
+        },
+        compare: {
+          duty: "",
+          gst: ""
+        },
+        itemAvailable: false
+      });
+      resetAnalyzeBtn.style.display = "none";
+    });
+  }
+})();
+
+
+
