@@ -23,7 +23,7 @@ function showDisplay(item){
  *  - Creates downloadable merged.xlsx
  ******************************************************************************/
 
-// ========== DOM ELEMENTS ==========
+// ========== DOM ELEMENTS ==========>
 const progressContainer = document.getElementById("progressContainer");
 const progressBar = document.getElementById("progressBar");
 const uploadForm = document.getElementById("uploadForm");
@@ -434,23 +434,7 @@ function generateTimestamp12() {
 }
 
 
-/*****************************************************
- * FIXED: Excel Modify Tool - Client Side
- * - Fixes dropzone -> file flow
- * - No variable shadowing
- * - Top-level helper functions
- * - Single Run button handler
- *******************************************************/
-
-/* ===========================================================================
-   EXCEL MODIFY TOOL (ISOLATED) — safe, no global collisions
-   - Wraps all code in an IIFE to prevent overriding merger helpers
-   - Uses unique function names (suffix _MOD)
-   - No accidental global writes
-   ========================================================================== */
-
-
-   /**************************************************************
+/**************************************************************
  * Excel Modifier Module (Full) — Exact-match (Option A)
  * - Isolated (IIFE) to avoid colliding with merger code
  * - Exact CCN matching: remove "8308" only if at start of target H
@@ -462,6 +446,7 @@ function generateTimestamp12() {
  **************************************************************/
 (function ExcelModifyModule() {
   // DOM bindings (must exist in your HTML)
+  const modifyForm = document.getElementById("modifyForm");
   const sourceDrop = document.getElementById("sourceDropZone");
   const sourceInput = document.getElementById("sourceFileInput");
   const sourceFileName = document.getElementById("sourceFileName");
@@ -472,15 +457,12 @@ function generateTimestamp12() {
 
   const runModifyBtn = document.getElementById("runModify");
   const modifyReportEl = document.getElementById("modifyReport");
-
-  // Local references
-  let sourceFile = null;
-  let targetFile = null;
+  const resetModifyBtn = document.getElementById("resetModifyBtn");
 
   /* -------------------------
      Dropzone setup (isolated)
      ------------------------- */
-  function setupDropZone_MOD(dropArea, fileInput, fileNameDisplay, setter) {
+  function setupDropZone_MOD(dropArea, fileInput, fileNameDisplay) {
     dropArea.addEventListener("dragover", (e) => { e.preventDefault(); dropArea.classList.add("dragover"); });
     dropArea.addEventListener("dragleave", () => dropArea.classList.remove("dragover"));
     dropArea.addEventListener("drop", (e) => {
@@ -489,7 +471,6 @@ function generateTimestamp12() {
       if (!f) return;
       if (!f.name.toLowerCase().endsWith(".xlsx")) { alert("Please drop a .xlsx file"); return; }
       try { const dt = new DataTransfer(); dt.items.add(f); fileInput.files = dt.files; } catch (err) { /*ignore*/ }
-      setter(f);
       fileNameDisplay.textContent = f.name;
       console.log("Drop set:", f.name);
     });
@@ -497,12 +478,13 @@ function generateTimestamp12() {
     fileInput.addEventListener("change", (e) => {
       const f = e.target.files && e.target.files[0]; if (!f) return;
       if (!f.name.toLowerCase().endsWith(".xlsx")) { alert("Please select a .xlsx file"); e.target.value = ""; return; }
-      setter(f); fileNameDisplay.textContent = f.name; console.log("Input set:", f.name);
+      fileNameDisplay.textContent = f.name;
+      console.log("Input set:", f.name);
     });
   }
 
-  setupDropZone_MOD(sourceDrop, sourceInput, sourceFileName, (f) => sourceFile = f);
-  setupDropZone_MOD(targetDrop, targetInput, targetFileName, (f) => targetFile = f);
+  setupDropZone_MOD(sourceDrop, sourceInput, sourceFileName);
+  setupDropZone_MOD(targetDrop, targetInput, targetFileName);
 
   /* -------------------------
      Helpers
@@ -535,16 +517,6 @@ function generateTimestamp12() {
       reader.onerror = (err) => reject(err);
       reader.readAsBinaryString(file);
     });
-  }
-
-  // safe download AOA
-  function downloadAoA_MOD(rows, filename = "updated_target.xlsx") {
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet(rows);
-    XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
-    const wbout = XLSX.write(wb, { bookType: "xlsx", type: "binary", compression: true, bookSST: false });
-    function s2ab(s) { const buf = new ArrayBuffer(s.length); const view = new Uint8Array(buf); for (let i = 0; i < s.length; i++) view[i] = s.charCodeAt(i) & 0xff; return buf; }
-    saveAs(new Blob([s2ab(wbout)], { type: "application/octet-stream" }), filename);
   }
 
   // force a worksheet cell to numeric general
@@ -731,6 +703,10 @@ function generateTimestamp12() {
           Final rows (approx): ${finalAoA.length}
         `;
       }
+      
+      if (resetModifyBtn) {
+        resetModifyBtn.style.display = 'flex';
+      }
 
       console.log("Modify complete. Downloaded:", outName);
     } catch (err) {
@@ -741,10 +717,28 @@ function generateTimestamp12() {
 
   /* wire run button */
   runModifyBtn.addEventListener("click", async () => {
-    const src = sourceFile || (sourceInput.files && sourceInput.files[0]) || null;
-    const tgt = targetFile || (targetInput.files && targetInput.files[0]) || null;
+    const src = sourceInput.files && sourceInput.files[0] ? sourceInput.files[0] : null;
+    const tgt = targetInput.files && targetInput.files[0] ? targetInput.files[0] : null;
     console.log("Run modify: src=", src && src.name, "tgt=", tgt && tgt.name);
     await modifyAndDownloadExactMatch_MOD({ sourceFileObj: src, targetFileObj: tgt });
+  });
+
+  /* wire reset button */
+  resetModifyBtn.addEventListener("click", () => {
+    // Reset the form, which clears the file inputs
+    if(modifyForm) modifyForm.reset();
+
+    // Clear file name displays
+    if(sourceFileName) sourceFileName.textContent = "";
+    if(targetFileName) targetFileName.textContent = "";
+
+    // Clear the report
+    if(modifyReportEl) modifyReportEl.innerHTML = "";
+
+    // Hide the reset button
+    resetModifyBtn.style.display = "none";
+
+    console.log("Modify Tool has been reset.");
   });
 
 })(); // end IIFE

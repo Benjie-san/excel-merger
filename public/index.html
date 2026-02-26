@@ -108,43 +108,43 @@
      EXCEL MODIFY TOOL (SECOND FEATURE)
      ======================================================= -->
      <div id="modifyTool" class="tool-section">
+      <form id="modifyForm">
+        <h2>D/T Header File</h2>
+        <p class="sub"> Drag and Drop SFTP and _DutiesHeader File to process data </p>
+      
+        <!-- DROP ZONE FOR SOURCE FILE -->
+        <div id="sourceDropZone" class="drop-area">
+          <i id="upload-icon" class="bi bi-file-earmark-arrow-up-fill"></i>
+          <p>Drag & Drop SFTP File Here</p>
+          <p>or click to select</p>
+          <input type="file" id="sourceFileInput" accept=".xlsx" hidden />
+        </div>
+        <p id="sourceFileName" class="filename"></p>
+      
+        <!-- DROP ZONE FOR TARGET FILE -->
+        <div id="targetDropZone" class="drop-area">
+          <i id="upload-icon" class="bi bi-file-earmark-arrow-up-fill"></i>
+          <p>Drag & Drop Duties Header Here</p>
+          <p>or click to select</p>
+          <input type="file" id="targetFileInput" accept=".xlsx" hidden />
+        </div>
+        <p id="targetFileName" class="filename"></p>
+      
+        <hr>
+      
+        <button type="button" id="runModify" class="btn-primary">Run Modify Process</button>
 
-      <h2>D/T Header File</h2>
-      <p class="sub"> Drag and Drop SFTP and _DutiesHeader File to process data </p>
-    
-      <!-- DROP ZONE FOR SOURCE FILE -->
-      <div id="sourceDropZone" class="drop-area">
-        <i id="upload-icon" class="bi bi-file-earmark-arrow-up-fill"></i>
-        <p>Drag & Drop SFTP File Here</p>
-        <p>or click to select</p>
-        <input type="file" id="sourceFileInput" accept=".xlsx" hidden />
-      </div>
-      <p id="sourceFileName" class="filename"></p>
-    
-      <!-- DROP ZONE FOR TARGET FILE -->
-      <div id="targetDropZone" class="drop-area">
-        <i id="upload-icon" class="bi bi-file-earmark-arrow-up-fill"></i>
-        <p>Drag & Drop Duties Header Here</p>
-        <p>or click to select</p>
-        <input type="file" id="targetFileInput" accept=".xlsx" hidden />
-      </div>
-      <p id="targetFileName" class="filename"></p>
-    
-      <hr>
-    
-      <button id="runModify" class="btn-primary">Run Modify Process</button>
+        <div id="modifyReport"></div>
 
-      <div id="modifyReport"></div>
-
-      <div id="modify-result-btn">
-        <button id="resetModifyBtn" style="display:none;">
-          <span class="material-symbols-outlined">
-          refresh
-          </span>
-          <p>Start Over</p>
-        </button>
-      </div>
-    
+        <div id="modify-result-btn">
+          <button type="button" id="resetModifyBtn" style="display:none;">
+            <span class="material-symbols-outlined">
+            refresh
+            </span>
+            <p>Start Over</p>
+          </button>
+        </div>
+      </form>
     </div>
   </main>
 
