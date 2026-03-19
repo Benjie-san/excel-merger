@@ -60,24 +60,17 @@
               <p>Add filename as first column</p>
             </label>
 
-            <div id="slicing-options">
-              <h3>Slicing Options</h3>
-              <div>
-                <input type="radio" id="billingSlicing" name="slicing" value="billing" checked>
-                <label for="billingSlicing">Billing Slicing</label>
-              </div>
-              <div>
-                <input type="radio" id="customSlicing" name="slicing" value="custom">
-                <label for="customSlicing">Custom Slicing</label>
-              </div>
-              <div id="customSlicingOptions" style="display:none;">
-                <label for="firstFileRows">Rows to remove from first file:</label>
-                <input type="number" id="firstFileRows" value="0" min="0">
-                <br>
-                <label for="restFileRows">Rows to remove from other files:</label>
-                <input type="number" id="restFileRows" value="0" min="0">
-              </div>
-            </div>
+        <div id="slicing-options">
+          <h3>Slicing Options</h3>
+          <div id="customSlicingOptions">
+            <label for="firstFileRows">Rows to remove from first file:</label>
+            <input type="number" id="firstFileRows" value="4" min="0">
+            <br>
+            <label for="restFileRows">Rows to remove from other files:</label>
+            <input type="number" id="restFileRows" value="5" min="0">
+            <p class="slicing-note">default values for header/item report</p>
+          </div>
+        </div>
 
             <hr>
 

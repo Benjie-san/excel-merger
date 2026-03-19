@@ -37,27 +37,11 @@ const dropZone = document.getElementById("dropZone");
 const fileList = document.getElementById("fileList");
 const fileCount = document.getElementById("fileCount");
 const reportDiv = document.getElementById("report");
-const billingSlicingRadio = document.getElementById("billingSlicing");
-const customSlicingRadio = document.getElementById("customSlicing");
-const customSlicingOptions = document.getElementById("customSlicingOptions");
 const firstFileRowsInput = document.getElementById("firstFileRows");
 const restFileRowsInput = document.getElementById("restFileRows");
 const scrollTopBtn = document.getElementById("scrollTopBtn");
 
 // ========== EVENT LISTENERS ==========
-
-billingSlicingRadio.addEventListener("change", () => {
-  if (billingSlicingRadio.checked) {
-    customSlicingOptions.style.display = "none";
-  }
-});
-
-customSlicingRadio.addEventListener("change", () => {
-  if (customSlicingRadio.checked) {
-    customSlicingOptions.style.display = "block";
-  }
-});
-
 // Scroll-to-top button
 if (scrollTopBtn) {
   window.addEventListener("scroll", () => {
@@ -172,7 +156,6 @@ async function processExcelFiles(files, addFilename) {
   let mergedData = [];
   let headersAdded = false;
 
-  const slicingMode = document.querySelector('input[name="slicing"]:checked').value;
   const firstFileRows = parseInt(firstFileRowsInput.value, 10);
   const restFileRows = parseInt(restFileRowsInput.value, 10);
 
@@ -182,19 +165,33 @@ async function processExcelFiles(files, addFilename) {
     let sheetData = await readExcelFile(file);
     if (sheetData.length === 0) continue;
 
-    let rowsToRemove = 0;
-    if (slicingMode === 'billing') {
-        rowsToRemove = i === 0 ? 4 : 5;
-    } else {
-        rowsToRemove = i === 0 ? firstFileRows : restFileRows;
-    }
+    const rowsToRemove = i === 0 ? firstFileRows : restFileRows;
 
     let trimmed = sheetData.slice(rowsToRemove);
 
-    // Remove empty rows
-    trimmed = trimmed.filter((row) =>
-      row.some((c) => c !== null && c !== undefined && c !== "")
-    );
+    // Trim leading empty rows (so header starts on first non-empty row)
+    let firstNonEmpty = 0;
+    while (firstNonEmpty < trimmed.length) {
+      const row = trimmed[firstNonEmpty];
+      const isEmpty = !row || row.every((c) => c === null || c === undefined || c === "");
+      if (!isEmpty) break;
+      firstNonEmpty++;
+    }
+    if (firstNonEmpty > 0) {
+      trimmed = trimmed.slice(firstNonEmpty);
+    }
+
+    // Trim only trailing empty rows (preserve internal blanks)
+    let lastNonEmpty = trimmed.length - 1;
+    while (lastNonEmpty >= 0) {
+      const row = trimmed[lastNonEmpty];
+      const isEmpty = !row || row.every((c) => c === null || c === undefined || c === "");
+      if (!isEmpty) break;
+      lastNonEmpty--;
+    }
+    if (lastNonEmpty < trimmed.length - 1) {
+      trimmed = trimmed.slice(0, lastNonEmpty + 1);
+    }
 
     if (trimmed.length === 0) continue;
 
@@ -205,8 +202,11 @@ async function processExcelFiles(files, addFilename) {
       headersAdded = true;
     }
 
+    // For the first file, skip the header row; for subsequent files, keep first row
+    const startRow = i === 0 ? 1 : 0;
+
     // Data rows
-    for (let r = 1; r < trimmed.length; r++) {
+    for (let r = startRow; r < trimmed.length; r++) {
       mergedData.push(
         addFilename ? [file.name, ...trimmed[r]] : trimmed[r]
       );
@@ -461,11 +461,8 @@ resetBtn.addEventListener("click", () => {
   fileList.innerHTML = "";
   fileCount.innerHTML = "No files selected";
   reportDiv.innerHTML = "";
-  billingSlicingRadio.checked = true;
-  customSlicingRadio.checked = false;
-  customSlicingOptions.style.display = "none";
-  firstFileRowsInput.value = "0";
-  restFileRowsInput.value = "0";
+  firstFileRowsInput.value = "4";
+  restFileRowsInput.value = "5";
 
 });
 

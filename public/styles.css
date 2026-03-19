@@ -187,6 +187,12 @@ main{
   width: 100%;
 }
 
+.slicing-note {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: #cbd5e1;
+}
+
 #dropZone.dragover, .drop-area.dragover {
   background-color: #f0f8ff;
   border-color: #4caf50;
