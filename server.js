@@ -14,12 +14,8 @@ const port = process.env.PORT || 8080;
 // Serve everything from /public as static files
 app.use(express.static(path.join(__dirname, "public")));
 
-// Render your index.ejs page (optional)
-app.set("views", path.join(__dirname, "views"));
-app.set("view engine", "ejs");
-
 app.get("/", (req, res) => {
-  res.render("index");
+  res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
 app.listen(port, () =>

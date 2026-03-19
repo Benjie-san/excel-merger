@@ -2,6 +2,7 @@
 const excelMerger = document.getElementById("excel-merger");
 const DTHeaderFile = document.getElementById("modifyTool");
 const analyzerTool = document.getElementById("analyzerTool");
+const candataTool = document.getElementById("candataTool");
 
 function showDisplay(view){
   let mode = view;
@@ -12,6 +13,9 @@ function showDisplay(view){
   DTHeaderFile.style.display = mode === "modify" ? "flex" : "none";
   if (analyzerTool) {
     analyzerTool.style.display = mode === "analyzer" ? "flex" : "none";
+  }
+  if (candataTool) {
+    candataTool.style.display = mode === "candata" ? "flex" : "none";
   }
 }
 
@@ -221,19 +225,23 @@ async function processExcelFiles(files, addFilename) {
 //  ANALYSIS: Count target values (only in "Brokerage Total" column)
 // =============================================================================
 function analyzeData(mergedData) {
-  const headers = mergedData[0];
-  const rows = mergedData.slice(1);
-
+  // Target values to check
+  const targetValues = [0.0175, 0.085, 0.71, 0.28];
   const report = {
-    totalRows: rows.length,
+    totalRows: 0,
     columnSummary: {},
     targetValueCounts: {}
   };
-
-  // Target values to check
-  const targetValues = [0.0175, 0.085, 0.71, 0.28];
-  const tolerance = 1e-3;
   targetValues.forEach(v => report.targetValueCounts[v] = 0);
+
+  if (!Array.isArray(mergedData) || mergedData.length === 0 || !Array.isArray(mergedData[0])) {
+    return report;
+  }
+
+  const headers = mergedData[0];
+  const rows = mergedData.slice(1);
+  report.totalRows = rows.length;
+  const tolerance = 1e-3;
 
   // Column selection
   const colIndex = headers.indexOf("Brokerage Total");
@@ -266,7 +274,7 @@ function analyzeData(mergedData) {
       .filter(v => v !== "" && v !== undefined && v !== null);
 
     const numeric = colValues
-      .map(v => parseFloat(v))
+      .map(v => parseNumberFromCell(v))
       .filter(n => !isNaN(n));
 
     const sum = numeric.reduce((a, b) => a + b, 0);
@@ -426,8 +434,8 @@ uploadForm.addEventListener("submit", async (e) => {
   reportDiv.innerHTML = `
       <h3>📊 Report</h3>
       <p><b>Total Rows:</b> ${report.totalRows}</p>
-      <p><b>Total Duty:</b> ${Math.abs(report.columnSummary.Duty?.sum || 0).toFixed(2)}</p>
-      <p><b>Total GST:</b> ${Math.abs(report.columnSummary["Gov. Sales Tax"]?.sum || 0).toFixed(2)}</p>
+      <p><b>Total Duty:</b> ${(report.columnSummary.Duty?.sum || 0).toFixed(2)}</p>
+      <p><b>Total GST:</b> ${(report.columnSummary["Gov. Sales Tax"]?.sum || 0).toFixed(2)}</p>
 
       <h4>Value Counts (Brokerage Total)</h4>
       <table border="1" cellpadding="5">
@@ -884,7 +892,7 @@ function generateTimestamp12() {
           <h4>Exceptions</h4>
           <p><b>Empty Value for Duty (CCNs):</b></p>
           <p>${safe(header.emptyValueForDutyCCNs)}</p>
-          <p><b>GST = 0 with Value for Duty threshold (CCNs):</b></p>
+          <p><b>GST = 0 with Value for Duty = 0 (CCNs):</b></p>
           <p>${safe(header.gstZeroCCNs)}</p>
           <p><b>Value for Duty &lt; 20 with Duty/GST &gt; 0 (CCNs):</b></p>
           <p>${safe(header.lowValueDutyCCNs)}</p>
@@ -1051,12 +1059,14 @@ function generateTimestamp12() {
       if (dutyVal !== null) totalDuty += dutyVal;
       if (gstVal !== null) totalGST += gstVal;
 
-      if (gstVal !== null && approxEqual(gstVal, 0) && valueForDutyVal !== null) {
-        const isPga225 = hasBrokerage && brokerageVal !== null && approxEqual(brokerageVal, 2.25);
-        const threshold = isPga225 ? 40.1 : 20.1;
-        if (valueForDutyVal > threshold && ccn) {
-          gstZeroSet.add(ccn);
-        }
+      if (
+        gstVal !== null &&
+        approxEqual(gstVal, 0) &&
+        valueForDutyVal !== null &&
+        approxEqual(valueForDutyVal, 0) &&
+        ccn
+      ) {
+        gstZeroSet.add(ccn);
       }
 
       if (valueForDutyVal !== null && valueForDutyVal < 20) {
@@ -1241,3 +1251,604 @@ function generateTimestamp12() {
 
 
 
+/**************************************************************
+ * Candata to Gets Format Module (UI Scaffold)
+ * - Accepts DutiesHeader + Candata Duties Item files
+ * - Converts both into GETS format and downloads two outputs
+ **************************************************************/
+(function CandataToGetsModule() {
+  const candataForm = document.getElementById("candataForm");
+  const headerDrop = document.getElementById("candataHeaderDropZone");
+  const headerInput = document.getElementById("candataHeaderFileInput");
+  const headerFileName = document.getElementById("candataHeaderFileName");
+
+  const itemDrop = document.getElementById("candataItemDropZone");
+  const itemInput = document.getElementById("candataItemFileInput");
+  const itemFileName = document.getElementById("candataItemFileName");
+
+  const runCandataBtn = document.getElementById("runCandata");
+  const resetCandataBtn = document.getElementById("resetCandataBtn");
+
+  if (!candataForm || !headerDrop || !headerInput || !itemDrop || !itemInput) return;
+
+  function getFirstSheetRows(file) {
+    return new Promise((resolve, reject) => {
+      if (!file) return resolve({ rows: [], sheetName: "Sheet1" });
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = e.target.result;
+          const wb = XLSX.read(data, { type: "binary", cellDates: true });
+          const firstSheetName = wb.SheetNames[0] || "Sheet1";
+          const ws = wb.Sheets[firstSheetName];
+          const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: "" });
+          resolve({ rows, sheetName: firstSheetName });
+        } catch (err) {
+          reject(err);
+        }
+      };
+      reader.onerror = (err) => reject(err);
+      reader.readAsBinaryString(file);
+    });
+  }
+
+  function isEmptyCell(v) {
+    return v === undefined || v === null || String(v).trim() === "";
+  }
+
+  function isEmptyRow(row) {
+    if (!Array.isArray(row)) return true;
+    return row.every((cell) => isEmptyCell(cell));
+  }
+
+  function normalizeHeaderCell(v) {
+    return String(v || "").trim().toLowerCase().replace(/\s+/g, " ");
+  }
+
+  function findHeaderRowAndColumns(rows, specs, maxScan = 25) {
+    const scanLimit = Math.min(rows.length, maxScan);
+    let best = { rowIndex: -1, score: -1, indexMap: {} };
+
+    for (let r = 0; r < scanLimit; r++) {
+      const row = rows[r] || [];
+      const normalized = row.map((cell) => normalizeHeaderCell(cell));
+      const indexMap = {};
+      let score = 0;
+
+      specs.forEach((spec) => {
+        let found = -1;
+        for (let c = 0; c < normalized.length; c++) {
+          const cell = normalized[c];
+          if (!cell) continue;
+          if (spec.matchers.some((rx) => rx.test(cell))) {
+            found = c;
+            break;
+          }
+        }
+        indexMap[spec.key] = found;
+        if (found !== -1) score++;
+      });
+
+      if (score > best.score) {
+        best = { rowIndex: r, score, indexMap };
+      }
+    }
+
+    return best;
+  }
+
+  function trimTransaction(value) {
+    const s = String(value || "").trim();
+    if (s.length <= 5) return s;
+    return s.slice(5);
+  }
+
+  function parseNumberZero(value) {
+    const parsed = parseNumberFromCell(value);
+    return parsed === null ? 0 : parsed;
+  }
+
+  function parseMaybeNumber(value) {
+    if (isEmptyCell(value)) return "";
+    const parsed = parseNumberFromCell(value);
+    return parsed === null ? String(value).trim() : parsed;
+  }
+
+  function formatDateMMDDYYYY(value) {
+    if (value === undefined || value === null) return "";
+    if (value instanceof Date && !isNaN(value.getTime())) {
+      const mm = String(value.getMonth() + 1).padStart(2, "0");
+      const dd = String(value.getDate()).padStart(2, "0");
+      const yyyy = String(value.getFullYear());
+      return `${mm}/${dd}/${yyyy}`;
+    }
+
+    const s = String(value).trim();
+    if (!s) return "";
+
+    // yyyy-mm-dd or yyyy-mm-dd...
+    const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (isoMatch) {
+      return `${isoMatch[2]}/${isoMatch[3]}/${isoMatch[1]}`;
+    }
+
+    // mm/dd/yyyy
+    const usMatch = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (usMatch) {
+      const mm = String(usMatch[1]).padStart(2, "0");
+      const dd = String(usMatch[2]).padStart(2, "0");
+      return `${mm}/${dd}/${usMatch[3]}`;
+    }
+
+    const dt = new Date(s);
+    if (!isNaN(dt.getTime())) {
+      const mm = String(dt.getMonth() + 1).padStart(2, "0");
+      const dd = String(dt.getDate()).padStart(2, "0");
+      const yyyy = String(dt.getFullYear());
+      return `${mm}/${dd}/${yyyy}`;
+    }
+
+    return s;
+  }
+
+  function stableSortByGstDesc(records, gstKeyName) {
+    return records
+      .map((rec, idx) => ({ rec, idx }))
+      .sort((a, b) => {
+        const gstDiff = (b.rec[gstKeyName] || 0) - (a.rec[gstKeyName] || 0);
+        if (Math.abs(gstDiff) > 1e-9) return gstDiff;
+        return a.idx - b.idx;
+      })
+      .map((x) => x.rec);
+  }
+
+  function formatAsDollarNumber(ws, r, c, value, formatString) {
+    const ref = XLSX.utils.encode_cell({ r, c });
+    ws[ref] = { t: "n", v: value, z: formatString };
+  }
+
+  function buildOutputFileName(inputName) {
+    const original = String(inputName || "").trim();
+    if (!original) return "output_GETS_FORMAT.xlsx";
+    const lastDot = original.lastIndexOf(".");
+    if (lastDot === -1) return `${original}_GETS_FORMAT.xlsx`;
+    const base = original.slice(0, lastDot);
+    const ext = original.slice(lastDot);
+    return `${base}_GETS_FORMAT${ext}`;
+  }
+
+  function workbookToBlob(wb) {
+    const wbout = XLSX.write(wb, {
+      bookType: "xlsx",
+      type: "binary",
+      compression: true,
+      bookSST: false
+    });
+
+    const buf = new ArrayBuffer(wbout.length);
+    const view = new Uint8Array(buf);
+    for (let i = 0; i < wbout.length; i++) {
+      view[i] = wbout.charCodeAt(i) & 0xff;
+    }
+    return new Blob([buf], { type: "application/octet-stream" });
+  }
+
+  function validateRequiredColumns(rows, specs, fileLabel) {
+    const found = findHeaderRowAndColumns(rows, specs);
+    if (found.rowIndex === -1 || found.score <= 0) {
+      throw new Error(`${fileLabel}: Could not locate the header row.`);
+    }
+
+    const missing = specs
+      .filter((spec) => found.indexMap[spec.key] === -1)
+      .map((spec) => spec.label);
+
+    if (missing.length) {
+      throw new Error(`${fileLabel}: Missing columns: ${missing.join(", ")}`);
+    }
+
+    return found;
+  }
+
+  function buildItemRecords(itemRows, itemIndexMap, dataStart) {
+    const records = [];
+    for (let r = dataStart; r < itemRows.length; r++) {
+      const row = itemRows[r] || [];
+      if (isEmptyRow(row)) continue;
+
+      const ccn = String(row[itemIndexMap.ccn] || "").trim();
+      if (!ccn) continue;
+
+      const gst = parseNumberZero(row[itemIndexMap.gst]);
+      const pst = parseNumberZero(row[itemIndexMap.pst]);
+      const govSalesTax = gst + pst;
+
+      records.push({
+        transactionNumber: trimTransaction(row[itemIndexMap.transaction]),
+        goodsDescription: String(row[itemIndexMap.productDescription] || "").trim(),
+        lineNumber: String(row[itemIndexMap.cciLine] || "").trim(),
+        countryOfOrigin: String(row[itemIndexMap.countryOfOrigin] || "").trim(),
+        tariffTreatment: String(row[itemIndexMap.tariffTreatment] || "").trim(),
+        partNumber: "",
+        quantity: parseMaybeNumber(row[itemIndexMap.quantity]),
+        port: String(row[itemIndexMap.port] || "").trim(),
+        vendorName: String(row[itemIndexMap.vendorName] || "").trim(),
+        valueForDuty: parseNumberZero(row[itemIndexMap.valueForDuty]),
+        hs: String(row[itemIndexMap.classification] || "").trim(),
+        dutyRate: parseMaybeNumber(row[itemIndexMap.dutyRate]),
+        duty: parseNumberZero(row[itemIndexMap.customsDuty]),
+        valueForTax: parseNumberZero(row[itemIndexMap.valueForTax]),
+        govSalesTax,
+        incoTerms: String(row[itemIndexMap.paymentTerms] || "").trim(),
+        ccn
+      });
+    }
+    return stableSortByGstDesc(records, "govSalesTax");
+  }
+
+  function buildItemAggregatesByCcn(itemRecords) {
+    const map = new Map();
+    for (const rec of itemRecords) {
+      if (!map.has(rec.ccn)) {
+        map.set(rec.ccn, { valueForDuty: 0, duty: 0, govSalesTax: 0 });
+      }
+      const agg = map.get(rec.ccn);
+      agg.valueForDuty += rec.valueForDuty;
+      agg.duty += rec.duty;
+      agg.govSalesTax += rec.govSalesTax;
+    }
+    return map;
+  }
+
+  function buildHeaderRecords(headerRows, headerIndexMap, dataStart, itemAggByCcn) {
+    const records = [];
+    for (let r = dataStart; r < headerRows.length; r++) {
+      const row = headerRows[r] || [];
+      if (isEmptyRow(row)) continue;
+
+      const ccn = String(row[headerIndexMap.ccn] || "").trim();
+      if (!ccn) continue;
+
+      const agg = itemAggByCcn.get(ccn) || { valueForDuty: 0, duty: 0, govSalesTax: 0 };
+      const etaFormatted = formatDateMMDDYYYY(row[headerIndexMap.etaDate]);
+
+      records.push({
+        transactionNumber: trimTransaction(row[headerIndexMap.transaction]),
+        ccn,
+        port: String(row[headerIndexMap.portNumber] || "").trim(),
+        shipmentDate: etaFormatted,
+        arrivalDate: etaFormatted,
+        releaseDate: etaFormatted,
+        cartons: "",
+        orderNumber: ccn,
+        otherReference: "",
+        valueForDuty: agg.valueForDuty,
+        duty: agg.duty,
+        govSalesTax: agg.govSalesTax,
+        brokerageTotal: 2.25,
+        addlChargesTotal: 0,
+        assessmentTotal: 0,
+        exciseTaxTotal: 0,
+        exchangeRate: 0,
+        incoTerms: String(row[headerIndexMap.paymentTerms] || "").trim()
+      });
+    }
+    return stableSortByGstDesc(records, "govSalesTax");
+  }
+
+  function buildItemOutputAoA(itemRecords, reportName, reportDate) {
+    const aoa = [];
+    aoa.push(["CLIENT:", "AMAZON "]);
+    aoa.push(["RPT NAME:", reportName || "AWB #"]);
+    aoa.push(["RPT DATE :", reportDate || ""]);
+    aoa.push([]);
+
+    aoa.push([
+      "Transaction Number",
+      "Goods Description",
+      "Line #",
+      "Country of Origin",
+      "Tariff Treatment",
+      "Part Number",
+      "Quantity",
+      "Port #",
+      "Vendor Name",
+      "Value for Duty",
+      "HS #",
+      "Duty Rate",
+      "Duty",
+      "Value for Tax",
+      "Gov. Sales Tax",
+      "Inco Terms",
+      "CCN"
+    ]);
+
+    itemRecords.forEach((rec) => {
+      aoa.push([
+        rec.transactionNumber,
+        rec.goodsDescription,
+        rec.lineNumber,
+        rec.countryOfOrigin,
+        rec.tariffTreatment,
+        rec.partNumber,
+        rec.quantity,
+        rec.port,
+        rec.vendorName,
+        rec.valueForDuty,
+        rec.hs,
+        rec.dutyRate,
+        rec.duty,
+        rec.valueForTax,
+        rec.govSalesTax,
+        rec.incoTerms,
+        rec.ccn
+      ]);
+    });
+
+    return aoa;
+  }
+
+  function buildHeaderOutputAoA(headerRecords, reportName, reportDate) {
+    const aoa = [];
+    aoa.push(["CLIENT:", "AMAZON "]);
+    aoa.push(["RPT NAME:", reportName]);
+    aoa.push(["RPT DATE :", reportDate]);
+    aoa.push([]);
+
+    aoa.push([
+      "Transaction Number",
+      "CCN",
+      "Port #",
+      "Shipment Date",
+      "Arrival Date",
+      "Release Date",
+      "No. of Cartons",
+      "Order Number",
+      "Other Reference",
+      "Value for Duty",
+      "Duty",
+      "Gov. Sales Tax",
+      "Brokerage Total",
+      "Addl. Charges Total",
+      "Assessment Total",
+      "Excise Tax Total",
+      "Exchange Rate",
+      "Inco Terms"
+    ]);
+
+    headerRecords.forEach((rec) => {
+      aoa.push([
+        rec.transactionNumber,
+        rec.ccn,
+        rec.port,
+        rec.shipmentDate,
+        rec.arrivalDate,
+        rec.releaseDate,
+        rec.cartons,
+        rec.orderNumber,
+        rec.otherReference,
+        rec.valueForDuty,
+        rec.duty,
+        rec.govSalesTax,
+        rec.brokerageTotal,
+        rec.addlChargesTotal,
+        rec.assessmentTotal,
+        rec.exciseTaxTotal,
+        rec.exchangeRate,
+        rec.incoTerms
+      ]);
+    });
+
+    return aoa;
+  }
+
+  function ensureDistinctFileName(primaryName, secondaryName, marker) {
+    if (String(primaryName || "").toLowerCase() !== String(secondaryName || "").toLowerCase()) {
+      return secondaryName;
+    }
+    const lastDot = secondaryName.lastIndexOf(".");
+    if (lastDot === -1) return `${secondaryName}_${marker}`;
+    const base = secondaryName.slice(0, lastDot);
+    const ext = secondaryName.slice(lastDot);
+    return `${base}_${marker}${ext}`;
+  }
+
+  function triggerDownloadBlob(blob, fileName) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      URL.revokeObjectURL(url);
+      a.remove();
+    }, 0);
+  }
+
+  function buildItemWorkbookDownload(itemAoA, sourceFileName) {
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(itemAoA);
+    XLSX.utils.book_append_sheet(wb, ws, "Sheet 1");
+    return {
+      blob: workbookToBlob(wb),
+      fileName: buildOutputFileName(sourceFileName)
+    };
+  }
+
+  function buildHeaderWorkbookDownload(headerAoA, sourceSheetName, sourceFileName) {
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(headerAoA);
+
+    const fmtJtoL = '_("$"* #,##0.00_);_("$"* \\(#,##0.00\\);_("$"* "-"??_);_(@_)';
+    const fmtMtoQ = '_([$$-409]* #,##0.00_);_([$$-409]* \\(#,##0.00\\);_([$$-409]* "-"??_);_(@_)';
+
+    for (let r = 5; r < headerAoA.length; r++) {
+      for (let c = 9; c <= 16; c++) {
+        const raw = (headerAoA[r] && headerAoA[r][c] !== undefined) ? headerAoA[r][c] : 0;
+        const num = parseNumberZero(raw);
+        const fmt = c <= 11 ? fmtJtoL : fmtMtoQ;
+        formatAsDollarNumber(ws, r, c, num, fmt);
+      }
+    }
+
+    XLSX.utils.book_append_sheet(wb, ws, sourceSheetName || "Air Shipments");
+    return {
+      blob: workbookToBlob(wb),
+      fileName: buildOutputFileName(sourceFileName)
+    };
+  }
+
+  async function runConversion() {
+    const headerFile = headerInput.files && headerInput.files[0] ? headerInput.files[0] : null;
+    const itemFile = itemInput.files && itemInput.files[0] ? itemInput.files[0] : null;
+
+    if (!headerFile || !itemFile) {
+      alert("Please provide both DutiesHeader and Candata Item files.");
+      return;
+    }
+
+    const headerSpecs = [
+      { key: "transaction", label: "Transaction Number", matchers: [/^transaction number$/i] },
+      { key: "ccn", label: "Cargo Control Number", matchers: [/cargo control number/i, /^ccn$/i] },
+      { key: "portNumber", label: "Port Number", matchers: [/^port number$/i, /^port #$/i] },
+      { key: "directShipDate", label: "Direct Ship Date", matchers: [/direct ship date/i] },
+      { key: "etaDate", label: "ETA Date", matchers: [/^eta date$/i, /\barrival date\b/i] },
+      { key: "releaseDate", label: "Release Date", matchers: [/^release date$/i] },
+      { key: "orderNumber", label: "Order Number", matchers: [/^order number$/i] },
+      { key: "totalValueForDuty", label: "Total Value For Duty (CAD)", matchers: [/total value for duty/i] },
+      { key: "totalCustomsDuties", label: "Total Customs Duties (CAD)", matchers: [/total customs duties/i] },
+      { key: "totalGst", label: "Total GST (CAD)", matchers: [/^total gst/i] },
+      { key: "totalProvincialSalesTax", label: "Total Provincial Sales Tax (CAD)", matchers: [/total provincial sales tax/i] },
+      { key: "paymentTerms", label: "Payment Terms", matchers: [/^payment terms$/i, /^inco terms$/i] },
+      { key: "billOfLading", label: "Bill of Lading", matchers: [/bill of lading/i, /\bawb\b/i] }
+    ];
+
+    const itemSpecs = [
+      { key: "transaction", label: "Transaction Number", matchers: [/^transaction number$/i] },
+      { key: "productDescription", label: "Product Description", matchers: [/product description/i, /goods description/i] },
+      { key: "cciLine", label: "CCI Line#", matchers: [/cci line#?/i, /\bline #\b/i] },
+      { key: "countryOfOrigin", label: "Country of Origin", matchers: [/country of origin/i] },
+      { key: "tariffTreatment", label: "Tariff Treatment", matchers: [/tariff treatment/i] },
+      { key: "quantity", label: "Quantity", matchers: [/^quantity$/i] },
+      { key: "port", label: "Port Number", matchers: [/^port number$/i, /^port #$/i] },
+      { key: "vendorName", label: "Vendor Name", matchers: [/vendor name/i] },
+      { key: "valueForDuty", label: "Value For Duty (CAD)", matchers: [/value for duty/i] },
+      { key: "classification", label: "Classification", matchers: [/^classification$/i, /^hs #$/i] },
+      { key: "dutyRate", label: "Duty Rate", matchers: [/^duty rate$/i] },
+      { key: "customsDuty", label: "Customs Duty (CAD)", matchers: [/customs duty/i, /^duty$/i] },
+      { key: "valueForTax", label: "Value for Tax (CAD)", matchers: [/value for tax/i] },
+      { key: "gst", label: "GST (CAD)", matchers: [/^gst/i, /gov\.?\s*sales/i] },
+      { key: "pst", label: "Provincial Sales Tax (CAD)", matchers: [/provincial sales tax/i, /\bpst\b/i] },
+      { key: "paymentTerms", label: "Payment Terms", matchers: [/^payment terms$/i, /^inco terms$/i] },
+      { key: "ccn", label: "Cargo Control Number", matchers: [/cargo control number/i, /^ccn$/i] },
+      { key: "billOfLading", label: "Bill of Lading", matchers: [/bill of lading/i, /\bawb\b/i] }
+    ];
+
+    try {
+      const { rows: headerRows, sheetName: headerSheetName } = await getFirstSheetRows(headerFile);
+      const { rows: itemRows } = await getFirstSheetRows(itemFile);
+
+      const headerFound = validateRequiredColumns(headerRows, headerSpecs, "DutiesHeader");
+      const itemFound = validateRequiredColumns(itemRows, itemSpecs, "Candata Duties Item");
+
+      const headerDataStart = headerFound.rowIndex + 1;
+      const itemDataStart = itemFound.rowIndex + 1;
+
+      const itemRecords = buildItemRecords(itemRows, itemFound.indexMap, itemDataStart);
+      if (!itemRecords.length) {
+        alert("Candata Duties Item: No data rows found after header.");
+        return;
+      }
+
+      const itemAggByCcn = buildItemAggregatesByCcn(itemRecords);
+      const headerRecords = buildHeaderRecords(headerRows, headerFound.indexMap, headerDataStart, itemAggByCcn);
+      if (!headerRecords.length) {
+        alert("DutiesHeader: No data rows found after header.");
+        return;
+      }
+
+      // Report metadata: first non-empty values from source header rows
+      let firstBOL = "";
+      let firstETA = "";
+      for (let r = headerDataStart; r < headerRows.length; r++) {
+        const row = headerRows[r] || [];
+        if (!firstBOL) {
+          const bol = String(row[headerFound.indexMap.billOfLading] || "").trim();
+          if (bol) firstBOL = bol;
+        }
+        if (!firstETA) {
+          const eta = row[headerFound.indexMap.etaDate];
+          const etaFormatted = formatDateMMDDYYYY(eta);
+          if (etaFormatted) firstETA = etaFormatted;
+        }
+        if (firstBOL && firstETA) break;
+      }
+
+      const headerReportName = `AWB # ${firstBOL || ""}`.trim();
+      const headerAoA = buildHeaderOutputAoA(headerRecords, headerReportName, firstETA || "");
+      const itemAoA = buildItemOutputAoA(itemRecords, headerReportName, firstETA || "");
+
+      const headerDownload = buildHeaderWorkbookDownload(headerAoA, headerSheetName, headerFile.name);
+      const itemDownload = buildItemWorkbookDownload(itemAoA, itemFile.name);
+      const safeItemName = ensureDistinctFileName(headerDownload.fileName, itemDownload.fileName, "ITEM");
+
+      // Trigger downloads sequentially to improve browser reliability for multi-file download.
+      triggerDownloadBlob(headerDownload.blob, headerDownload.fileName);
+      setTimeout(() => {
+        triggerDownloadBlob(itemDownload.blob, safeItemName);
+      }, 180);
+
+      if (resetCandataBtn) resetCandataBtn.style.display = "flex";
+    } catch (err) {
+      console.error("Candata conversion error:", err);
+      alert(err && err.message ? err.message : `Candata conversion failed: ${err}`);
+    }
+  }
+
+  function setupDropZone_CD(dropArea, fileInput, fileNameDisplay) {
+    dropArea.addEventListener("dragover", (e) => { e.preventDefault(); dropArea.classList.add("dragover"); });
+    dropArea.addEventListener("dragleave", () => dropArea.classList.remove("dragover"));
+    dropArea.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropArea.classList.remove("dragover");
+      const f = e.dataTransfer.files && e.dataTransfer.files[0];
+      if (!f) return;
+      if (!f.name.toLowerCase().endsWith(".xlsx")) { alert("Please drop a .xlsx file"); return; }
+      try {
+        const dt = new DataTransfer();
+        dt.items.add(f);
+        fileInput.files = dt.files;
+      } catch (err) { /* ignore */ }
+      if (fileNameDisplay) fileNameDisplay.textContent = f.name;
+    });
+
+    dropArea.addEventListener("click", () => fileInput.click());
+    fileInput.addEventListener("change", (e) => {
+      const f = e.target.files && e.target.files[0];
+      if (!f) return;
+      if (!f.name.toLowerCase().endsWith(".xlsx")) {
+        alert("Please select a .xlsx file");
+        e.target.value = "";
+        return;
+      }
+      if (fileNameDisplay) fileNameDisplay.textContent = f.name;
+    });
+  }
+
+  setupDropZone_CD(headerDrop, headerInput, headerFileName);
+  setupDropZone_CD(itemDrop, itemInput, itemFileName);
+
+  if (runCandataBtn) {
+    runCandataBtn.addEventListener("click", runConversion);
+  }
+
+  if (resetCandataBtn) {
+    resetCandataBtn.addEventListener("click", () => {
+      candataForm.reset();
+      if (headerFileName) headerFileName.textContent = "";
+      if (itemFileName) itemFileName.textContent = "";
+      resetCandataBtn.style.display = "none";
+    });
+  }
+})();

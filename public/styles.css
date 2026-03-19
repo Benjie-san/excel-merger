@@ -92,7 +92,7 @@ main{
   display: none;
 }
 
-#link-merger, #link-modifier{
+#link-merger, #link-modifier, #link-analyzer, #link-candata{
   cursor: pointer;
 }
 
@@ -202,7 +202,7 @@ main{
   display: none; /* Hides the default file input */
 } 
 
-.custom-file-upload-label, #merge-btn, #process-btn, #downloadLink, #resetBtn, #resetModifyBtn, #resetAnalyzeBtn {
+.custom-file-upload-label, #merge-btn, #process-btn, #downloadLink, #resetBtn, #resetModifyBtn, #resetAnalyzeBtn, #resetCandataBtn {
   display: inline-block; /* Makes the label behave like a button*/
   background-color: #ff581f;
   color: white;
@@ -264,7 +264,7 @@ input[type="checkbox"]:checked {
   transition: width 0.3s;
 }
 
-#result-btn, #modify-result-btn, #analyze-result-btn{
+#result-btn, #modify-result-btn, #analyze-result-btn, #candata-result-btn{
   display: flex;
   justify-content: center;
   align-items: center;
@@ -283,7 +283,7 @@ input[type="checkbox"]:checked {
 }
 
 
-#resetBtn, #resetModifyBtn, #resetAnalyzeBtn {
+#resetBtn, #resetModifyBtn, #resetAnalyzeBtn, #resetCandataBtn {
   background-color: #4b5563;
   display: flex;
   align-items: center;
@@ -433,7 +433,7 @@ input[type="checkbox"]:checked {
     border-radius: 10px;
   }
 
-  #modifyForm, #analyzerForm {
+  #modifyForm, #analyzerForm, #candataForm {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -479,7 +479,7 @@ input[type="checkbox"]:checked {
     background: #0059c9;
   }
   
-  #modify-result-btn, #analyze-result-btn {
+  #modify-result-btn, #analyze-result-btn, #candata-result-btn {
     margin-top: 10px;
   }
   

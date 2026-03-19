@@ -26,6 +26,8 @@
     <hr>
     <a id="link-analyzer" onclick="showDisplay('analyzer')">Header/Item Analyzer</a>
     <hr>
+    <a id="link-candata" onclick="showDisplay('candata')">Candata to Gets Format</a>
+    <hr>
 
   </div>
 
@@ -181,6 +183,51 @@
 
           <div class="analyzer-report">
             <div id="analyzeReport"></div>
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <!-- =======================================================
+         CANDATA TO GETS FORMAT (UPCOMING FEATURE)
+         ======================================================= -->
+    <div id="candataTool" class="tool-section">
+      <form id="candataForm">
+        <h2>Candata to Gets Format</h2>
+        <p class="sub"> Drag and Drop DutiesHeader and Candata Item files to prepare conversion </p>
+
+        <div class="analyzer-layout">
+          <div class="analyzer-main">
+            <!-- DROP ZONE FOR DUTIES HEADER FILE -->
+            <div id="candataHeaderDropZone" class="drop-area">
+              <i id="upload-icon" class="bi bi-file-earmark-arrow-up-fill"></i>
+              <p>Drag & Drop Candata Duties Header Here</p>
+              <p>or click to select</p>
+              <input type="file" id="candataHeaderFileInput" accept=".xlsx" hidden />
+            </div>
+            <p id="candataHeaderFileName" class="filename"></p>
+
+            <!-- DROP ZONE FOR CANDATA ITEM FILE -->
+            <div id="candataItemDropZone" class="drop-area">
+              <i id="upload-icon" class="bi bi-file-earmark-arrow-up-fill"></i>
+              <p>Drag & Drop Candata Duties Item Here</p>
+              <p>or click to select</p>
+              <input type="file" id="candataItemFileInput" accept=".xlsx" hidden />
+            </div>
+            <p id="candataItemFileName" class="filename"></p>
+
+            <hr>
+
+            <button type="button" id="runCandata" class="btn-primary">Run Conversion</button>
+
+            <div id="candata-result-btn">
+              <button type="button" id="resetCandataBtn" style="display:none;">
+                <span class="material-symbols-outlined">
+                refresh
+                </span>
+                <p>Start Over</p>
+              </button>
+            </div>
           </div>
         </div>
       </form>
