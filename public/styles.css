@@ -462,6 +462,26 @@ input[type="checkbox"]:checked {
     margin-bottom: 15px;
     color: #fff;
   }
+
+  .candata-client-options {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+    margin: 6px 0 4px;
+  }
+
+  .candata-client-options p {
+    margin: 0;
+  }
+
+  .candata-client-options label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+  }
   
   .btn-primary {
     background: #ff581f;

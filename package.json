@@ -1,21 +1,67 @@
 {
   "name": "node-express-web",
   "version": "1.0.0",
-  "description": "",
-  "main": "server.js",
+  "description": "Customs Billing Portal desktop app",
+  "main": "electron/main.js",
   "scripts": {
     "dev": "nodemon server.js",
-    "start": "node server.js"
+    "start": "node server.js",
+    "desktop": "node electron/launch.js",
+    "desktop:dev": "node electron/launch.js",
+    "desktop:pack": "electron-builder --dir",
+    "desktop:dist": "electron-builder --win nsis",
+    "desktop:dist:signed": "electron-builder --win nsis --publish never -c.forceCodeSigning=true",
+    "desktop:verify": "powershell -NoProfile -ExecutionPolicy Bypass -File electron/verify-release.ps1",
+    "desktop:verify:signed": "powershell -NoProfile -ExecutionPolicy Bypass -File electron/verify-release.ps1 -FailOnUnsigned",
+    "desktop:release:check": "npm run desktop:dist && npm run desktop:verify",
+    "test:regression": "node scripts/regression-smoke.js"
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
     "ejs": "^3.1.9",
-    "express": "^4.21.2",
-    "multer": "^2.0.2",
+    "express": "^4.22.1",
+    "multer": "^2.1.1",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "nodemon": "^3.1.10"
+    "electron": "^37.2.0",
+    "electron-builder": "^26.8.1",
+    "nodemon": "^3.1.10",
+    "rcedit": "^4.0.1"
+  },
+  "build": {
+    "appId": "com.customs.billingportal",
+    "productName": "Customs Billing Portal",
+    "afterPack": "electron/afterPack.js",
+    "asar": true,
+    "artifactName": "${productName} Setup ${version}.${ext}",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "public/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": false,
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico"
+    }
   }
 }

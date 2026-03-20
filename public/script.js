@@ -19,6 +19,35 @@ function showDisplay(view){
   }
 }
 
+function downloadBlobFile(blob, fileName) {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  setTimeout(() => {
+    URL.revokeObjectURL(url);
+    anchor.remove();
+  }, 0);
+}
+
+const navBindings = [
+  { id: "link-merger", view: "merger" },
+  { id: "link-modifier", view: "modify" },
+  { id: "link-analyzer", view: "analyzer" },
+  { id: "link-candata", view: "candata" }
+];
+
+navBindings.forEach(({ id, view }) => {
+  const link = document.getElementById(id);
+  if (!link) return;
+  link.addEventListener("click", (event) => {
+    event.preventDefault();
+    showDisplay(view);
+  });
+});
+
 /*******************************************************************************
  *  CLIENT-SIDE EXCEL MERGER + ANALYZER
  *  - Processes XLSX files entirely in the browser
@@ -104,7 +133,7 @@ function updateFileList(files) {
 // =============================================================================
 filesInput.addEventListener("change", () => {
   updateFileList(filesInput.files);
-  fileCount.innerHTML = `${filesInput.files.length} files selected`;
+  fileCount.textContent = `${filesInput.files.length} files selected`;
 });
 
 
@@ -128,7 +157,7 @@ dropZone.addEventListener("drop", (e) => {
   if (files.length > 0) {
     filesInput.files = files;
     updateFileList(files);
-    fileCount.innerHTML = `${files.length} files selected`;
+    fileCount.textContent = `${files.length} files selected`;
   }
 });
 
@@ -397,7 +426,7 @@ function exportMergedExcel(mergedData) {
     return buf;
   }
 
-  saveAs(new Blob([s2ab(wbout)], { type: "application/octet-stream" }), "merged.xlsx");
+  downloadBlobFile(new Blob([s2ab(wbout)], { type: "application/octet-stream" }), "merged.xlsx");
 }
 
 
@@ -467,7 +496,7 @@ resetBtn.addEventListener("click", () => {
   progressContainer.style.display = "none";
 
   fileList.innerHTML = "";
-  fileCount.innerHTML = "No files selected";
+  fileCount.textContent = "No files selected";
   reportDiv.innerHTML = "";
   firstFileRowsInput.value = "4";
   restFileRowsInput.value = "5";
@@ -788,7 +817,7 @@ function generateTimestamp12() {
       // Write and download
       const wbout = XLSX.write(wb, { bookType: "xlsx", type: "binary", compression: true, bookSST: false });
       function s2ab(s) { const buf = new ArrayBuffer(s.length); const view = new Uint8Array(buf); for (let i = 0; i < s.length; i++) view[i] = s.charCodeAt(i) & 0xff; return buf; }
-      saveAs(new Blob([s2ab(wbout)], { type: "application/octet-stream" }), outName);
+      downloadBlobFile(new Blob([s2ab(wbout)], { type: "application/octet-stream" }), outName);
 
       // UI report
       if (resetModifyBtn) {
@@ -872,7 +901,14 @@ function generateTimestamp12() {
 
   function renderAnalyzerReport(data) {
     if (!analyzeReportEl) return;
-    const safe = (v) => (v === undefined || v === null ? "-" : v);
+    const escapeHtml = (input) =>
+      String(input)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    const safe = (v) => (v === undefined || v === null ? "-" : escapeHtml(v));
     const header = data.header || {};
     const item = data.item || {};
     const compare = data.compare || {};
@@ -1337,10 +1373,16 @@ function generateTimestamp12() {
     return best;
   }
 
+  function sanitizeExcelText(value) {
+    const s = String(value || "").trim();
+    if (!s) return "";
+    return /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
+  }
+
   function trimTransaction(value) {
     const s = String(value || "").trim();
-    if (s.length <= 5) return s;
-    return s.slice(5);
+    if (s.length <= 5) return sanitizeExcelText(s);
+    return sanitizeExcelText(s.slice(5));
   }
 
   function parseNumberZero(value) {
@@ -1352,6 +1394,15 @@ function generateTimestamp12() {
     if (isEmptyCell(value)) return "";
     const parsed = parseNumberFromCell(value);
     return parsed === null ? String(value).trim() : parsed;
+  }
+
+  function getCandataClientSetup() {
+    const selected = candataForm.querySelector('input[name=\"candataClientType\"]:checked');
+    const selectedValue = selected ? selected.value : "AMAZON";
+    if (selectedValue === "OCS_JAPAN") {
+      return { clientName: "OCS JAPAN", brokerageFee: 0.71 };
+    }
+    return { clientName: "AMAZON", brokerageFee: 2.25 };
   }
 
   function formatDateMMDDYYYY(value) {
@@ -1465,22 +1516,23 @@ function generateTimestamp12() {
 
       records.push({
         transactionNumber: trimTransaction(row[itemIndexMap.transaction]),
-        goodsDescription: String(row[itemIndexMap.productDescription] || "").trim(),
-        lineNumber: String(row[itemIndexMap.cciLine] || "").trim(),
-        countryOfOrigin: String(row[itemIndexMap.countryOfOrigin] || "").trim(),
-        tariffTreatment: String(row[itemIndexMap.tariffTreatment] || "").trim(),
+        goodsDescription: sanitizeExcelText(row[itemIndexMap.productDescription]),
+        lineNumber: sanitizeExcelText(row[itemIndexMap.cciLine]),
+        countryOfOrigin: sanitizeExcelText(row[itemIndexMap.countryOfOrigin]),
+        tariffTreatment: sanitizeExcelText(row[itemIndexMap.tariffTreatment]),
         partNumber: "",
         quantity: parseMaybeNumber(row[itemIndexMap.quantity]),
-        port: String(row[itemIndexMap.port] || "").trim(),
-        vendorName: String(row[itemIndexMap.vendorName] || "").trim(),
+        port: sanitizeExcelText(row[itemIndexMap.port]),
+        vendorName: sanitizeExcelText(row[itemIndexMap.vendorName]),
         valueForDuty: parseNumberZero(row[itemIndexMap.valueForDuty]),
-        hs: String(row[itemIndexMap.classification] || "").trim(),
+        hs: sanitizeExcelText(row[itemIndexMap.classification]),
         dutyRate: parseMaybeNumber(row[itemIndexMap.dutyRate]),
         duty: parseNumberZero(row[itemIndexMap.customsDuty]),
         valueForTax: parseNumberZero(row[itemIndexMap.valueForTax]),
         govSalesTax,
-        incoTerms: String(row[itemIndexMap.paymentTerms] || "").trim(),
-        ccn
+        incoTerms: sanitizeExcelText(row[itemIndexMap.paymentTerms]),
+        ccn,
+        safeCcn: sanitizeExcelText(ccn)
       });
     }
     return stableSortByGstDesc(records, "govSalesTax");
@@ -1500,7 +1552,7 @@ function generateTimestamp12() {
     return map;
   }
 
-  function buildHeaderRecords(headerRows, headerIndexMap, dataStart, itemAggByCcn) {
+  function buildHeaderRecords(headerRows, headerIndexMap, dataStart, itemAggByCcn, brokerageFee) {
     const records = [];
     for (let r = dataStart; r < headerRows.length; r++) {
       const row = headerRows[r] || [];
@@ -1510,35 +1562,40 @@ function generateTimestamp12() {
       if (!ccn) continue;
 
       const agg = itemAggByCcn.get(ccn) || { valueForDuty: 0, duty: 0, govSalesTax: 0 };
-      const etaFormatted = formatDateMMDDYYYY(row[headerIndexMap.etaDate]);
+      const releaseFormatted = formatDateMMDDYYYY(row[headerIndexMap.releaseDate]);
+      const headerGst = parseNumberZero(row[headerIndexMap.totalGst]);
+      const headerPst = parseNumberZero(row[headerIndexMap.totalProvincialSalesTax]);
+      const recomputedHeaderGst = headerGst + headerPst;
 
       records.push({
         transactionNumber: trimTransaction(row[headerIndexMap.transaction]),
-        ccn,
-        port: String(row[headerIndexMap.portNumber] || "").trim(),
-        shipmentDate: etaFormatted,
-        arrivalDate: etaFormatted,
-        releaseDate: etaFormatted,
+        ccn: sanitizeExcelText(ccn),
+        port: sanitizeExcelText(row[headerIndexMap.portNumber]),
+        shipmentDate: releaseFormatted,
+        arrivalDate: releaseFormatted,
+        releaseDate: releaseFormatted,
         cartons: "",
-        orderNumber: ccn,
+        orderNumber: sanitizeExcelText(ccn),
         otherReference: "",
         valueForDuty: agg.valueForDuty,
         duty: agg.duty,
-        govSalesTax: agg.govSalesTax,
-        brokerageTotal: 2.25,
+        // Explicitly recompute GST from Header GST + Header PST.
+        // Keep zero values as zero (no blank fallback).
+        govSalesTax: recomputedHeaderGst,
+        brokerageTotal: brokerageFee,
         addlChargesTotal: 0,
         assessmentTotal: 0,
         exciseTaxTotal: 0,
         exchangeRate: 0,
-        incoTerms: String(row[headerIndexMap.paymentTerms] || "").trim()
+        incoTerms: sanitizeExcelText(row[headerIndexMap.paymentTerms])
       });
     }
     return stableSortByGstDesc(records, "govSalesTax");
   }
 
-  function buildItemOutputAoA(itemRecords, reportName, reportDate) {
+  function buildItemOutputAoA(itemRecords, reportName, reportDate, clientName) {
     const aoa = [];
-    aoa.push(["CLIENT:", "AMAZON "]);
+    aoa.push(["CLIENT:", clientName]);
     aoa.push(["RPT NAME:", reportName || "AWB #"]);
     aoa.push(["RPT DATE :", reportDate || ""]);
     aoa.push([]);
@@ -1581,16 +1638,16 @@ function generateTimestamp12() {
         rec.valueForTax,
         rec.govSalesTax,
         rec.incoTerms,
-        rec.ccn
+        rec.safeCcn
       ]);
     });
 
     return aoa;
   }
 
-  function buildHeaderOutputAoA(headerRecords, reportName, reportDate) {
+  function buildHeaderOutputAoA(headerRecords, reportName, reportDate, clientName) {
     const aoa = [];
-    aoa.push(["CLIENT:", "AMAZON "]);
+    aoa.push(["CLIENT:", clientName]);
     aoa.push(["RPT NAME:", reportName]);
     aoa.push(["RPT DATE :", reportDate]);
     aoa.push([]);
@@ -1746,6 +1803,8 @@ function generateTimestamp12() {
     ];
 
     try {
+      const clientSetup = getCandataClientSetup();
+
       const { rows: headerRows, sheetName: headerSheetName } = await getFirstSheetRows(headerFile);
       const { rows: itemRows } = await getFirstSheetRows(itemFile);
 
@@ -1762,7 +1821,13 @@ function generateTimestamp12() {
       }
 
       const itemAggByCcn = buildItemAggregatesByCcn(itemRecords);
-      const headerRecords = buildHeaderRecords(headerRows, headerFound.indexMap, headerDataStart, itemAggByCcn);
+      const headerRecords = buildHeaderRecords(
+        headerRows,
+        headerFound.indexMap,
+        headerDataStart,
+        itemAggByCcn,
+        clientSetup.brokerageFee
+      );
       if (!headerRecords.length) {
         alert("DutiesHeader: No data rows found after header.");
         return;
@@ -1770,24 +1835,34 @@ function generateTimestamp12() {
 
       // Report metadata: first non-empty values from source header rows
       let firstBOL = "";
-      let firstETA = "";
+      let firstReleaseDate = "";
       for (let r = headerDataStart; r < headerRows.length; r++) {
         const row = headerRows[r] || [];
         if (!firstBOL) {
-          const bol = String(row[headerFound.indexMap.billOfLading] || "").trim();
+          const bol = sanitizeExcelText(row[headerFound.indexMap.billOfLading]);
           if (bol) firstBOL = bol;
         }
-        if (!firstETA) {
-          const eta = row[headerFound.indexMap.etaDate];
-          const etaFormatted = formatDateMMDDYYYY(eta);
-          if (etaFormatted) firstETA = etaFormatted;
+        if (!firstReleaseDate) {
+          const releaseDate = row[headerFound.indexMap.releaseDate];
+          const releaseFormatted = formatDateMMDDYYYY(releaseDate);
+          if (releaseFormatted) firstReleaseDate = releaseFormatted;
         }
-        if (firstBOL && firstETA) break;
+        if (firstBOL && firstReleaseDate) break;
       }
 
       const headerReportName = `AWB # ${firstBOL || ""}`.trim();
-      const headerAoA = buildHeaderOutputAoA(headerRecords, headerReportName, firstETA || "");
-      const itemAoA = buildItemOutputAoA(itemRecords, headerReportName, firstETA || "");
+      const headerAoA = buildHeaderOutputAoA(
+        headerRecords,
+        headerReportName,
+        firstReleaseDate || "",
+        clientSetup.clientName
+      );
+      const itemAoA = buildItemOutputAoA(
+        itemRecords,
+        headerReportName,
+        firstReleaseDate || "",
+        clientSetup.clientName
+      );
 
       const headerDownload = buildHeaderWorkbookDownload(headerAoA, headerSheetName, headerFile.name);
       const itemDownload = buildItemWorkbookDownload(itemAoA, itemFile.name);

@@ -1,5 +1,7 @@
 {
+    "$schema": "https://openapi.vercel.sh/vercel.json",
     "version": 2,
+    "installCommand": "npm install --omit=dev",
     "builds": [
       { "src": "server.js", "use": "@vercel/node" },
       { "src": "public/**", "use": "@vercel/static" }
