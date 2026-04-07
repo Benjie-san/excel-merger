@@ -1396,15 +1396,6 @@ function generateTimestamp12() {
     return parsed === null ? String(value).trim() : parsed;
   }
 
-  function getCandataClientSetup() {
-    const selected = candataForm.querySelector('input[name=\"candataClientType\"]:checked');
-    const selectedValue = selected ? selected.value : "AMAZON";
-    if (selectedValue === "OCS_JAPAN") {
-      return { clientName: "OCS JAPAN", brokerageFee: 0.71 };
-    }
-    return { clientName: "AMAZON", brokerageFee: 2.25 };
-  }
-
   function formatDateMMDDYYYY(value) {
     if (value === undefined || value === null) return "";
     if (value instanceof Date && !isNaN(value.getTime())) {
@@ -1552,7 +1543,7 @@ function generateTimestamp12() {
     return map;
   }
 
-  function buildHeaderRecords(headerRows, headerIndexMap, dataStart, itemAggByCcn, brokerageFee) {
+  function buildHeaderRecords(headerRows, headerIndexMap, dataStart, itemAggByCcn) {
     const records = [];
     for (let r = dataStart; r < headerRows.length; r++) {
       const row = headerRows[r] || [];
@@ -1582,7 +1573,7 @@ function generateTimestamp12() {
         // Explicitly recompute GST from Header GST + Header PST.
         // Keep zero values as zero (no blank fallback).
         govSalesTax: recomputedHeaderGst,
-        brokerageTotal: brokerageFee,
+        brokerageTotal: "",
         addlChargesTotal: 0,
         assessmentTotal: 0,
         exciseTaxTotal: 0,
@@ -1743,6 +1734,11 @@ function generateTimestamp12() {
     for (let r = 5; r < headerAoA.length; r++) {
       for (let c = 9; c <= 16; c++) {
         const raw = (headerAoA[r] && headerAoA[r][c] !== undefined) ? headerAoA[r][c] : 0;
+        if (c === 12 && isEmptyCell(raw)) {
+          const brokerageRef = XLSX.utils.encode_cell({ r, c });
+          delete ws[brokerageRef];
+          continue;
+        }
         const num = parseNumberZero(raw);
         const fmt = c <= 11 ? fmtJtoL : fmtMtoQ;
         formatAsDollarNumber(ws, r, c, num, fmt);
@@ -1803,7 +1799,7 @@ function generateTimestamp12() {
     ];
 
     try {
-      const clientSetup = getCandataClientSetup();
+      const clientName = "";
 
       const { rows: headerRows, sheetName: headerSheetName } = await getFirstSheetRows(headerFile);
       const { rows: itemRows } = await getFirstSheetRows(itemFile);
@@ -1825,8 +1821,7 @@ function generateTimestamp12() {
         headerRows,
         headerFound.indexMap,
         headerDataStart,
-        itemAggByCcn,
-        clientSetup.brokerageFee
+        itemAggByCcn
       );
       if (!headerRecords.length) {
         alert("DutiesHeader: No data rows found after header.");
@@ -1855,13 +1850,13 @@ function generateTimestamp12() {
         headerRecords,
         headerReportName,
         firstReleaseDate || "",
-        clientSetup.clientName
+        clientName
       );
       const itemAoA = buildItemOutputAoA(
         itemRecords,
         headerReportName,
         firstReleaseDate || "",
-        clientSetup.clientName
+        clientName
       );
 
       const headerDownload = buildHeaderWorkbookDownload(headerAoA, headerSheetName, headerFile.name);

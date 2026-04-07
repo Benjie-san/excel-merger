@@ -217,7 +217,7 @@ function buildItemAggregatesByCcn(itemRecords) {
   return map;
 }
 
-function buildHeaderRecords(headerRows, headerIndexMap, dataStart, itemAggByCcn, brokerageFee) {
+function buildHeaderRecords(headerRows, headerIndexMap, dataStart, itemAggByCcn) {
   const records = [];
   for (let r = dataStart; r < headerRows.length; r++) {
     const row = headerRows[r] || [];
@@ -245,7 +245,7 @@ function buildHeaderRecords(headerRows, headerIndexMap, dataStart, itemAggByCcn,
       valueForDuty: agg.valueForDuty,
       duty: agg.duty,
       govSalesTax: recomputedHeaderGst,
-      brokerageTotal: brokerageFee,
+      brokerageTotal: "",
       addlChargesTotal: 0,
       assessmentTotal: 0,
       exciseTaxTotal: 0,
@@ -459,7 +459,7 @@ function runCandataRegression(rootDir) {
   const itemFound = validateRequiredColumns(itemRows, itemSpecs, "Candata Duties Item");
   const itemRecords = buildItemRecords(itemRows, itemFound.indexMap, itemFound.rowIndex + 1);
   const itemAggByCcn = buildItemAggregatesByCcn(itemRecords);
-  const headerRecords = buildHeaderRecords(headerRows, headerFound.indexMap, headerFound.rowIndex + 1, itemAggByCcn, 2.25);
+  const headerRecords = buildHeaderRecords(headerRows, headerFound.indexMap, headerFound.rowIndex + 1, itemAggByCcn);
 
   let firstBOL = "";
   let firstReleaseDate = "";
@@ -478,8 +478,8 @@ function runCandataRegression(rootDir) {
   }
 
   const reportName = `AWB # ${firstBOL || ""}`.trim();
-  const actualHeaderAoA = buildHeaderOutputAoA(headerRecords, reportName, firstReleaseDate || "", "AMAZON");
-  const actualItemAoA = buildItemOutputAoA(itemRecords, reportName, firstReleaseDate || "", "AMAZON");
+  const actualHeaderAoA = buildHeaderOutputAoA(headerRecords, reportName, firstReleaseDate || "", "");
+  const actualItemAoA = buildItemOutputAoA(itemRecords, reportName, firstReleaseDate || "", "");
   const expectedHeaderAoA = readFirstSheetRows(headerOutExpected).rows;
   const expectedItemAoA = readFirstSheetRows(itemOutExpected).rows;
 
@@ -494,9 +494,34 @@ function runCandataRegression(rootDir) {
   delete expectedHeaderSummary.reportDate;
   delete actualItemSummary.reportDate;
   delete expectedItemSummary.reportDate;
+  delete actualHeaderSummary.client;
+  delete expectedHeaderSummary.client;
+  delete actualItemSummary.client;
+  delete expectedItemSummary.client;
+  delete actualHeaderSummary.sumBrokerage;
+  delete expectedHeaderSummary.sumBrokerage;
+
+  const explicitIssues = [];
+  const headerClientCell = String((actualHeaderAoA[0] || [])[1] || "").trim();
+  const itemClientCell = String((actualItemAoA[0] || [])[1] || "").trim();
+  if (headerClientCell !== "") {
+    explicitIssues.push(`Header A2 client should be blank, got ${JSON.stringify(headerClientCell)}`);
+  }
+  if (itemClientCell !== "") {
+    explicitIssues.push(`Item A2 client should be blank, got ${JSON.stringify(itemClientCell)}`);
+  }
+
+  const headerDataRows = actualHeaderAoA.slice(5);
+  for (let i = 0; i < headerDataRows.length; i++) {
+    const brokerageCell = String((headerDataRows[i] || [])[12] || "").trim();
+    if (brokerageCell !== "") {
+      explicitIssues.push(`Header brokerage cell should be blank at data row ${i + 6}, got ${JSON.stringify(brokerageCell)}`);
+      break;
+    }
+  }
 
   return {
-    headerIssues: compareObjects(actualHeaderSummary, expectedHeaderSummary),
+    headerIssues: compareObjects(actualHeaderSummary, expectedHeaderSummary).concat(explicitIssues),
     itemIssues: compareObjects(actualItemSummary, expectedItemSummary)
   };
 }
