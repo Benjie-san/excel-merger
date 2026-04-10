@@ -1529,21 +1529,7 @@ function generateTimestamp12() {
     return stableSortByGstDesc(records, "govSalesTax");
   }
 
-  function buildItemAggregatesByCcn(itemRecords) {
-    const map = new Map();
-    for (const rec of itemRecords) {
-      if (!map.has(rec.ccn)) {
-        map.set(rec.ccn, { valueForDuty: 0, duty: 0, govSalesTax: 0 });
-      }
-      const agg = map.get(rec.ccn);
-      agg.valueForDuty += rec.valueForDuty;
-      agg.duty += rec.duty;
-      agg.govSalesTax += rec.govSalesTax;
-    }
-    return map;
-  }
-
-  function buildHeaderRecords(headerRows, headerIndexMap, dataStart, itemAggByCcn) {
+  function buildHeaderRecords(headerRows, headerIndexMap, dataStart) {
     const records = [];
     for (let r = dataStart; r < headerRows.length; r++) {
       const row = headerRows[r] || [];
@@ -1552,8 +1538,9 @@ function generateTimestamp12() {
       const ccn = String(row[headerIndexMap.ccn] || "").trim();
       if (!ccn) continue;
 
-      const agg = itemAggByCcn.get(ccn) || { valueForDuty: 0, duty: 0, govSalesTax: 0 };
       const releaseFormatted = formatDateMMDDYYYY(row[headerIndexMap.releaseDate]);
+      const headerValueForDuty = parseNumberZero(row[headerIndexMap.totalValueForDuty]);
+      const headerDuty = parseNumberZero(row[headerIndexMap.totalCustomsDuties]);
       const headerGst = parseNumberZero(row[headerIndexMap.totalGst]);
       const headerPst = parseNumberZero(row[headerIndexMap.totalProvincialSalesTax]);
       const recomputedHeaderGst = headerGst + headerPst;
@@ -1568,8 +1555,8 @@ function generateTimestamp12() {
         cartons: "",
         orderNumber: sanitizeExcelText(ccn),
         otherReference: "",
-        valueForDuty: agg.valueForDuty,
-        duty: agg.duty,
+        valueForDuty: headerValueForDuty,
+        duty: headerDuty,
         // Explicitly recompute GST from Header GST + Header PST.
         // Keep zero values as zero (no blank fallback).
         govSalesTax: recomputedHeaderGst,
@@ -1816,12 +1803,10 @@ function generateTimestamp12() {
         return;
       }
 
-      const itemAggByCcn = buildItemAggregatesByCcn(itemRecords);
       const headerRecords = buildHeaderRecords(
         headerRows,
         headerFound.indexMap,
-        headerDataStart,
-        itemAggByCcn
+        headerDataStart
       );
       if (!headerRecords.length) {
         alert("DutiesHeader: No data rows found after header.");

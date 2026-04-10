@@ -203,21 +203,7 @@ function buildItemRecords(itemRows, itemIndexMap, dataStart) {
   return stableSortByGstDesc(records, "govSalesTax");
 }
 
-function buildItemAggregatesByCcn(itemRecords) {
-  const map = new Map();
-  for (const rec of itemRecords) {
-    if (!map.has(rec.ccn)) {
-      map.set(rec.ccn, { valueForDuty: 0, duty: 0, govSalesTax: 0 });
-    }
-    const agg = map.get(rec.ccn);
-    agg.valueForDuty += rec.valueForDuty;
-    agg.duty += rec.duty;
-    agg.govSalesTax += rec.govSalesTax;
-  }
-  return map;
-}
-
-function buildHeaderRecords(headerRows, headerIndexMap, dataStart, itemAggByCcn) {
+function buildHeaderRecords(headerRows, headerIndexMap, dataStart) {
   const records = [];
   for (let r = dataStart; r < headerRows.length; r++) {
     const row = headerRows[r] || [];
@@ -226,8 +212,9 @@ function buildHeaderRecords(headerRows, headerIndexMap, dataStart, itemAggByCcn)
     const ccn = String(row[headerIndexMap.ccn] || "").trim();
     if (!ccn) continue;
 
-    const agg = itemAggByCcn.get(ccn) || { valueForDuty: 0, duty: 0, govSalesTax: 0 };
     const releaseFormatted = formatDateMMDDYYYY(row[headerIndexMap.releaseDate]);
+    const headerValueForDuty = parseNumberZero(row[headerIndexMap.totalValueForDuty]);
+    const headerDuty = parseNumberZero(row[headerIndexMap.totalCustomsDuties]);
     const headerGst = parseNumberZero(row[headerIndexMap.totalGst]);
     const headerPst = parseNumberZero(row[headerIndexMap.totalProvincialSalesTax]);
     const recomputedHeaderGst = headerGst + headerPst;
@@ -242,8 +229,8 @@ function buildHeaderRecords(headerRows, headerIndexMap, dataStart, itemAggByCcn)
       cartons: "",
       orderNumber: sanitizeExcelText(ccn),
       otherReference: "",
-      valueForDuty: agg.valueForDuty,
-      duty: agg.duty,
+      valueForDuty: headerValueForDuty,
+      duty: headerDuty,
       govSalesTax: recomputedHeaderGst,
       brokerageTotal: "",
       addlChargesTotal: 0,
@@ -458,8 +445,7 @@ function runCandataRegression(rootDir) {
   const headerFound = validateRequiredColumns(headerRows, headerSpecs, "DutiesHeader");
   const itemFound = validateRequiredColumns(itemRows, itemSpecs, "Candata Duties Item");
   const itemRecords = buildItemRecords(itemRows, itemFound.indexMap, itemFound.rowIndex + 1);
-  const itemAggByCcn = buildItemAggregatesByCcn(itemRecords);
-  const headerRecords = buildHeaderRecords(headerRows, headerFound.indexMap, headerFound.rowIndex + 1, itemAggByCcn);
+  const headerRecords = buildHeaderRecords(headerRows, headerFound.indexMap, headerFound.rowIndex + 1);
 
   let firstBOL = "";
   let firstReleaseDate = "";
@@ -526,6 +512,78 @@ function runCandataRegression(rootDir) {
   };
 }
 
+function runGetsHeaderCarryoverRegression(rootDir) {
+  const rawHeaderPath = path.join(rootDir, "raw duties header.xlsx");
+  if (!fs.existsSync(rawHeaderPath)) {
+    return { issues: [`Missing test file: ${rawHeaderPath}`] };
+  }
+
+  const headerSpecs = [
+    { key: "transaction", label: "Transaction Number", matchers: [/^transaction number$/i] },
+    { key: "ccn", label: "Cargo Control Number", matchers: [/cargo control number/i, /^ccn$/i] },
+    { key: "portNumber", label: "Port Number", matchers: [/^port number$/i, /^port #$/i] },
+    { key: "releaseDate", label: "Release Date", matchers: [/^release date$/i] },
+    { key: "totalValueForDuty", label: "Total Value For Duty (CAD)", matchers: [/total value for duty/i] },
+    { key: "totalCustomsDuties", label: "Total Customs Duties (CAD)", matchers: [/total customs duties/i] },
+    { key: "totalGst", label: "Total GST (CAD)", matchers: [/^total gst/i] },
+    { key: "totalProvincialSalesTax", label: "Total Provincial Sales Tax (CAD)", matchers: [/total provincial sales tax/i] },
+    { key: "paymentTerms", label: "Payment Terms", matchers: [/^payment terms$/i, /^inco terms$/i] }
+  ];
+
+  const { rows: headerRows } = readFirstSheetRows(rawHeaderPath);
+  const headerFound = validateRequiredColumns(headerRows, headerSpecs, "raw duties header.xlsx");
+  const headerRecords = buildHeaderRecords(headerRows, headerFound.indexMap, headerFound.rowIndex + 1);
+
+  let sourceVfd = 0;
+  let sourceDuty = 0;
+  let sourceRowCount = 0;
+  for (let r = headerFound.rowIndex + 1; r < headerRows.length; r++) {
+    const row = headerRows[r] || [];
+    const ccn = String(row[headerFound.indexMap.ccn] || "").trim();
+    if (!ccn) continue;
+    sourceVfd += parseNumberZero(row[headerFound.indexMap.totalValueForDuty]);
+    sourceDuty += parseNumberZero(row[headerFound.indexMap.totalCustomsDuties]);
+    sourceRowCount++;
+  }
+
+  let transformedVfd = 0;
+  let transformedDuty = 0;
+  for (const rec of headerRecords) {
+    transformedVfd += parseNumberZero(rec.valueForDuty);
+    transformedDuty += parseNumberZero(rec.duty);
+  }
+
+  sourceVfd = round2(sourceVfd);
+  sourceDuty = round2(sourceDuty);
+  transformedVfd = round2(transformedVfd);
+  transformedDuty = round2(transformedDuty);
+
+  const issues = [];
+  if (sourceRowCount === 0) {
+    issues.push("raw duties header.xlsx produced zero data rows with CCN.");
+  }
+  if (sourceVfd <= 0) {
+    issues.push(`Expected positive source Value for Duty sum, got ${sourceVfd}`);
+  }
+  if (Math.abs(transformedVfd - sourceVfd) > 0.01) {
+    issues.push(`Value for Duty carryover mismatch: transformed=${transformedVfd} source=${sourceVfd}`);
+  }
+  if (Math.abs(transformedDuty - sourceDuty) > 0.01) {
+    issues.push(`Duty carryover mismatch: transformed=${transformedDuty} source=${sourceDuty}`);
+  }
+
+  return {
+    issues,
+    summary: {
+      rows: sourceRowCount,
+      sourceVfd,
+      sourceDuty,
+      transformedVfd,
+      transformedDuty
+    }
+  };
+}
+
 function runMergeRegression(rootDir) {
   const dir = path.join(rootDir, "MERGE");
   const expectedPath = path.join(dir, "merged.xlsx");
@@ -563,6 +621,7 @@ function runMergeRegression(rootDir) {
 function main() {
   const rootDir = path.join(process.cwd(), "Test files");
   const candata = runCandataRegression(rootDir);
+  const getsHeaderCarryover = runGetsHeaderCarryoverRegression(rootDir);
   const merge = runMergeRegression(rootDir);
 
   let failed = false;
@@ -582,6 +641,17 @@ function main() {
     failed = true;
     console.log("Candata Item: FAIL");
     candata.itemIssues.forEach((issue) => console.log(`  - ${issue}`));
+  }
+
+  if (getsHeaderCarryover.issues.length === 0) {
+    console.log("GETS Header Carryover: PASS");
+    console.log(
+      `  - Rows=${getsHeaderCarryover.summary.rows}, VFD=${getsHeaderCarryover.summary.transformedVfd}, Duty=${getsHeaderCarryover.summary.transformedDuty}`
+    );
+  } else {
+    failed = true;
+    console.log("GETS Header Carryover: FAIL");
+    getsHeaderCarryover.issues.forEach((issue) => console.log(`  - ${issue}`));
   }
 
   if (merge.mode === "smoke-only") {
