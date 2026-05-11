@@ -841,6 +841,7 @@ function generateTimestamp12() {
      - Extracts all 8308 entries from header file (Column H, J)
      - Compares with SFTP file (Column AC, AS)
      - Reports mismatches in Value for Duty
+     - Converts values to numeric for comparison (handles accounting format, decimals)
      ------------------------- */
   async function analyze8308ValueForDuty(sourceFileObj, targetFileObj) {
     try {
@@ -853,7 +854,7 @@ function generateTimestamp12() {
       const targetRows = Array.isArray(tgtRows) ? tgtRows : [];
       const sourceRows = Array.isArray(srcRows) ? srcRows : [];
 
-      // Build map of SFTP file: CCN -> Value for Duty
+      // Build map of SFTP file: CCN -> Value for Duty (numeric)
       const sftpValueMap = new Map();
       for (let r = 2; r < sourceRows.length; r++) {
         const row = sourceRows[r] || [];
@@ -861,8 +862,8 @@ function generateTimestamp12() {
         const valueRaw = row[COL_AS];
         const ccn = ccnRaw === undefined || ccnRaw === null ? "" : String(ccnRaw).trim();
         if (ccn !== "") {
-          const value = valueRaw === undefined || valueRaw === null ? "" : String(valueRaw).trim();
-          sftpValueMap.set(ccn, value);
+          const numValue = parseNumberFromCell_MOD(valueRaw);
+          sftpValueMap.set(ccn, { raw: valueRaw, numeric: numValue });
         }
       }
 
@@ -876,30 +877,57 @@ function generateTimestamp12() {
         
         if (ccn.startsWith("8308")) {
           const cleanCCN = ccn.substring(4); // Remove 8308 prefix
-          const headerValue = valueRaw === undefined || valueRaw === null ? "" : String(valueRaw).trim();
+          const numValue = parseNumberFromCell_MOD(valueRaw);
           eightThreeZeroEightEntries.push({
             originalCCN: ccn,
             cleanCCN: cleanCCN,
-            headerValue: headerValue,
+            headerRaw: valueRaw,
+            headerNumeric: numValue,
             rowIndex: r + 1 // Excel row number (1-based)
           });
         }
       }
 
-      // Compare with SFTP values
+      // Compare with SFTP values (numeric comparison with tolerance)
       const mismatches = [];
       let matchCount = 0;
+      const numTolerance = 0.001; // Small tolerance for floating point differences
 
       for (const entry of eightThreeZeroEightEntries) {
-        const sftpValue = sftpValueMap.get(entry.cleanCCN) || "-";
-        if (entry.headerValue !== sftpValue) {
+        const sftpData = sftpValueMap.get(entry.cleanCCN);
+        
+        if (!sftpData) {
+          // No match in SFTP
           mismatches.push({
             ...entry,
-            sftpValue: sftpValue,
-            match: false
+            sftpRaw: "-",
+            sftpNumeric: null,
+            match: false,
+            reason: "CCN not found in SFTP"
           });
         } else {
-          matchCount++;
+          // Compare numerically
+          const headerNum = entry.headerNumeric;
+          const sftpNum = sftpData.numeric;
+          
+          let isMatch = false;
+          if (headerNum !== null && sftpNum !== null) {
+            isMatch = Math.abs(headerNum - sftpNum) <= numTolerance;
+          } else if (headerNum === null && sftpNum === null) {
+            isMatch = true; // Both empty/invalid
+          }
+          
+          if (isMatch) {
+            matchCount++;
+          } else {
+            mismatches.push({
+              ...entry,
+              sftpRaw: sftpData.raw,
+              sftpNumeric: sftpData.numeric,
+              match: false,
+              reason: "Value mismatch"
+            });
+          }
         }
       }
 
@@ -945,10 +973,13 @@ function generateTimestamp12() {
       html += `<h4 style="color: #ef4444; margin-top: 0;">Mismatches - CCNs with Unequal Value for Duty</h4>`;
       html += `<div class="analyze-8308-ccn-list">`;
       for (const mismatch of analysisResult.mismatches) {
+        const headerDisplay = mismatch.headerNumeric !== null ? mismatch.headerNumeric.toFixed(2) : mismatch.headerRaw;
+        const sftpDisplay = mismatch.sftpNumeric !== null ? mismatch.sftpNumeric.toFixed(2) : mismatch.sftpRaw;
         html += `<div class="analyze-8308-ccn-item">`;
         html += `<strong>CCN:</strong> ${mismatch.cleanCCN}<br>`;
-        html += `<strong>Header Value:</strong> ${mismatch.headerValue}<br>`;
-        html += `<strong>SFTP Value:</strong> ${mismatch.sftpValue}`;
+        html += `<strong>Header Value:</strong> ${mismatch.headerRaw} (${headerDisplay})<br>`;
+        html += `<strong>SFTP Value:</strong> ${mismatch.sftpRaw} (${sftpDisplay})<br>`;
+        html += `<strong>Reason:</strong> ${mismatch.reason}`;
         html += `</div>`;
       }
       html += `</div></div>`;
