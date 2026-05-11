@@ -32,6 +32,8 @@
     <hr>
     <a id="link-candata">Candata to Gets Format</a>
     <hr>
+    <a id="link-apc-item">APC D/T Item File</a>
+    <hr>
 
   </div>
 
@@ -138,6 +140,8 @@
             <p>Start Over</p>
           </button>
         </div>
+
+        <div id="modifyReport"></div>
       </form>
     </div>
 
@@ -233,6 +237,45 @@
               </button>
             </div>
           </div>
+        </div>
+      </form>
+    </div>
+
+    <!-- =======================================================
+         APC D/T ITEM FILE
+         ======================================================= -->
+    <div id="apcItemTool" class="tool-section">
+      <form id="apcItemForm">
+        <h2>APC D/T Item File</h2>
+        <p class="sub"> Drag and Drop SFTP and _DutiesItem File to process data </p>
+
+        <div id="apcSourceDropZone" class="drop-area">
+          <i id="upload-icon" class="bi bi-file-earmark-arrow-up-fill"></i>
+          <p>Drag & Drop SFTP File Here</p>
+          <p>or click to select</p>
+          <input type="file" id="apcSourceFileInput" accept=".xlsx" hidden />
+        </div>
+        <p id="apcSourceFileName" class="filename"></p>
+
+        <div id="apcItemDropZone" class="drop-area">
+          <i id="upload-icon" class="bi bi-file-earmark-arrow-up-fill"></i>
+          <p>Drag & Drop Duties Item Here</p>
+          <p>or click to select</p>
+          <input type="file" id="apcItemFileInput" accept=".xlsx" hidden />
+        </div>
+        <p id="apcItemFileName" class="filename"></p>
+
+        <hr>
+
+        <button type="button" id="runApcItem" class="btn-primary" disabled>Generate APC D/T Item File</button>
+
+        <div id="apc-item-result-btn">
+          <button type="button" id="resetApcItemBtn" style="display:none;">
+            <span class="material-symbols-outlined">
+            refresh
+            </span>
+            <p>Start Over</p>
+          </button>
         </div>
       </form>
     </div>

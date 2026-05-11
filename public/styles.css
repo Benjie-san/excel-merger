@@ -92,7 +92,7 @@ main{
   display: none;
 }
 
-#link-merger, #link-modifier, #link-analyzer, #link-candata{
+#link-merger, #link-modifier, #link-analyzer, #link-candata, #link-apc-item{
   cursor: pointer;
 }
 
@@ -202,7 +202,7 @@ main{
   display: none; /* Hides the default file input */
 } 
 
-.custom-file-upload-label, #merge-btn, #process-btn, #downloadLink, #resetBtn, #resetModifyBtn, #resetAnalyzeBtn, #resetCandataBtn {
+.custom-file-upload-label, #merge-btn, #process-btn, #downloadLink, #resetBtn, #resetModifyBtn, #resetAnalyzeBtn, #resetCandataBtn, #resetApcItemBtn {
   display: inline-block; /* Makes the label behave like a button*/
   background-color: #ff581f;
   color: white;
@@ -264,7 +264,7 @@ input[type="checkbox"]:checked {
   transition: width 0.3s;
 }
 
-#result-btn, #modify-result-btn, #analyze-result-btn, #candata-result-btn{
+#result-btn, #modify-result-btn, #analyze-result-btn, #candata-result-btn, #apc-item-result-btn{
   display: flex;
   justify-content: center;
   align-items: center;
@@ -283,7 +283,7 @@ input[type="checkbox"]:checked {
 }
 
 
-#resetBtn, #resetModifyBtn, #resetAnalyzeBtn, #resetCandataBtn {
+#resetBtn, #resetModifyBtn, #resetAnalyzeBtn, #resetCandataBtn, #resetApcItemBtn {
   background-color: #4b5563;
   display: flex;
   align-items: center;
@@ -498,8 +498,119 @@ input[type="checkbox"]:checked {
   .btn-primary:hover {
     background: #0059c9;
   }
+
+  .btn-primary:disabled {
+    background: #4b5563;
+    color: #d1d5db;
+    cursor: not-allowed;
+  }
+
+  .btn-primary:disabled:hover {
+    background: #4b5563;
+  }
   
-  #modify-result-btn, #analyze-result-btn, #candata-result-btn {
+  .btn-secondary {
+    background: #0070f3;
+    color: white;
+    padding: 12px 18px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    margin-top: 10px;
+    align-self: center;
+    margin-bottom: 10px;
+    font-size: 14px;
+  }
+  
+  .btn-secondary:hover {
+    background: #0059c9;
+  }
+
+  .btn-secondary:disabled {
+    background: #4b5563;
+    color: #d1d5db;
+    cursor: not-allowed;
+  }
+
+  .btn-secondary:disabled:hover {
+    background: #4b5563;
+  }
+
+  .analyze-report-container {
+    width: 100%;
+    margin-top: 15px;
+    padding: 15px;
+    background: #111827;
+    border-left: 4px solid #0070f3;
+    border-radius: 6px;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+
+  .analyze-8308-report {
+    margin: 0;
+  }
+
+  .analyze-8308-report h4 {
+    margin: 12px 0 8px;
+    color: #0070f3;
+  }
+
+  .analyze-8308-report p {
+    margin: 6px 0;
+    line-height: 1.4;
+  }
+
+  .analyze-8308-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    margin: 15px 0;
+  }
+
+  .analyze-8308-stat {
+    background: #0f1419;
+    padding: 12px;
+    border-radius: 6px;
+    border-left: 3px solid #ff581f;
+  }
+
+  .analyze-8308-stat-label {
+    font-size: 12px;
+    color: #9ca3af;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  .analyze-8308-stat-value {
+    font-size: 20px;
+    font-weight: bold;
+    color: #fff;
+  }
+
+  .analyze-8308-mismatches {
+    margin-top: 15px;
+    background: #0f1419;
+    padding: 12px;
+    border-radius: 6px;
+    border-left: 3px solid #ef4444;
+  }
+
+  .analyze-8308-ccn-list {
+    margin-top: 10px;
+    padding-left: 20px;
+  }
+
+  .analyze-8308-ccn-item {
+    margin: 8px 0;
+    padding: 8px;
+    background: #1f2937;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 13px;
+  }
+  
+  #modify-result-btn, #analyze-result-btn, #candata-result-btn, #apc-item-result-btn, #analyze-8308-result-btn {
     margin-top: 10px;
   }
   

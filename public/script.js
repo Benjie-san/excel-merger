@@ -3,6 +3,7 @@ const excelMerger = document.getElementById("excel-merger");
 const DTHeaderFile = document.getElementById("modifyTool");
 const analyzerTool = document.getElementById("analyzerTool");
 const candataTool = document.getElementById("candataTool");
+const apcItemTool = document.getElementById("apcItemTool");
 
 function showDisplay(view){
   let mode = view;
@@ -16,6 +17,9 @@ function showDisplay(view){
   }
   if (candataTool) {
     candataTool.style.display = mode === "candata" ? "flex" : "none";
+  }
+  if (apcItemTool) {
+    apcItemTool.style.display = mode === "apc-item" ? "flex" : "none";
   }
 }
 
@@ -36,7 +40,8 @@ const navBindings = [
   { id: "link-merger", view: "merger" },
   { id: "link-modifier", view: "modify" },
   { id: "link-analyzer", view: "analyzer" },
-  { id: "link-candata", view: "candata" }
+  { id: "link-candata", view: "candata" },
+  { id: "link-apc-item", view: "apc-item" }
 ];
 
 navBindings.forEach(({ id, view }) => {
@@ -831,12 +836,161 @@ function generateTimestamp12() {
     }
   }
 
+  /* -------------------------
+     8308 Value-for-Duty Analyzer
+     - Extracts all 8308 entries from header file (Column H, J)
+     - Compares with SFTP file (Column AC, AS)
+     - Reports mismatches in Value for Duty
+     ------------------------- */
+  async function analyze8308ValueForDuty(sourceFileObj, targetFileObj) {
+    try {
+      const COL_AC = 28, COL_AS = 44;
+      const COL_H = 7, COL_J = 9;
+
+      const tgtRows = await readExcelFile_MOD(targetFileObj);
+      const srcRows = await readExcelFile_MOD(sourceFileObj);
+
+      const targetRows = Array.isArray(tgtRows) ? tgtRows : [];
+      const sourceRows = Array.isArray(srcRows) ? srcRows : [];
+
+      // Build map of SFTP file: CCN -> Value for Duty
+      const sftpValueMap = new Map();
+      for (let r = 2; r < sourceRows.length; r++) {
+        const row = sourceRows[r] || [];
+        const ccnRaw = row[COL_AC];
+        const valueRaw = row[COL_AS];
+        const ccn = ccnRaw === undefined || ccnRaw === null ? "" : String(ccnRaw).trim();
+        if (ccn !== "") {
+          const value = valueRaw === undefined || valueRaw === null ? "" : String(valueRaw).trim();
+          sftpValueMap.set(ccn, value);
+        }
+      }
+
+      // Extract 8308 entries from header
+      const eightThreeZeroEightEntries = [];
+      for (let r = 5; r < targetRows.length; r++) {
+        const row = targetRows[r] || [];
+        const ccnRaw = row[COL_H];
+        const valueRaw = row[COL_J];
+        const ccn = ccnRaw === undefined || ccnRaw === null ? "" : String(ccnRaw).trim();
+        
+        if (ccn.startsWith("8308")) {
+          const cleanCCN = ccn.substring(4); // Remove 8308 prefix
+          const headerValue = valueRaw === undefined || valueRaw === null ? "" : String(valueRaw).trim();
+          eightThreeZeroEightEntries.push({
+            originalCCN: ccn,
+            cleanCCN: cleanCCN,
+            headerValue: headerValue,
+            rowIndex: r + 1 // Excel row number (1-based)
+          });
+        }
+      }
+
+      // Compare with SFTP values
+      const mismatches = [];
+      let matchCount = 0;
+
+      for (const entry of eightThreeZeroEightEntries) {
+        const sftpValue = sftpValueMap.get(entry.cleanCCN) || "-";
+        if (entry.headerValue !== sftpValue) {
+          mismatches.push({
+            ...entry,
+            sftpValue: sftpValue,
+            match: false
+          });
+        } else {
+          matchCount++;
+        }
+      }
+
+      return {
+        total: eightThreeZeroEightEntries.length,
+        matches: matchCount,
+        mismatches: mismatches,
+        success: true
+      };
+    } catch (err) {
+      console.error("8308 analysis error:", err);
+      return {
+        success: false,
+        error: err.message
+      };
+    }
+  }
+
+  /* -------------------------
+     Render 8308 Analysis Report
+     ------------------------- */
+  function renderModifyReport(analysisResult) {
+    const reportEl = document.getElementById("modifyReport");
+    if (!reportEl) return;
+
+    if (!analysisResult.success) {
+      reportEl.innerHTML = `<div class="analyze-report-container"><div class="analyze-8308-report"><h4>Analysis Error</h4><p>${analysisResult.error}</p></div></div>`;
+      return;
+    }
+
+    let html = `<div class="analyze-report-container"><div class="analyze-8308-report">`;
+    html += `<h4>8308 Value-for-Duty Analysis</h4>`;
+    html += `<div class="analyze-8308-summary">`;
+    html += `<div class="analyze-8308-stat"><div class="analyze-8308-stat-label">Total 8308 Entries</div><div class="analyze-8308-stat-value">${analysisResult.total}</div></div>`;
+    html += `<div class="analyze-8308-stat"><div class="analyze-8308-stat-label">Matching Values</div><div class="analyze-8308-stat-value">${analysisResult.matches}</div></div>`;
+    html += `<div class="analyze-8308-stat"><div class="analyze-8308-stat-label">Mismatches Found</div><div class="analyze-8308-stat-value" style="color: ${analysisResult.mismatches.length > 0 ? '#ef4444' : '#4ade80'}">${analysisResult.mismatches.length}</div></div>`;
+    html += `</div>`;
+
+    if (analysisResult.mismatches.length > 0) {
+      html += `<div class="analyze-8308-mismatches">`;
+      html += `<h4 style="color: #ef4444; margin-top: 0;">Mismatches - CCNs with Unequal Value for Duty</h4>`;
+      html += `<div class="analyze-8308-ccn-list">`;
+      for (const mismatch of analysisResult.mismatches) {
+        html += `<div class="analyze-8308-ccn-item">`;
+        html += `<strong>CCN:</strong> ${mismatch.cleanCCN}<br>`;
+        html += `<strong>Header Value:</strong> ${mismatch.headerValue}<br>`;
+        html += `<strong>SFTP Value:</strong> ${mismatch.sftpValue}`;
+        html += `</div>`;
+      }
+      html += `</div></div>`;
+    } else {
+      html += `<p style="color: #4ade80; margin-top: 10px;"><strong>✓ All 8308 entries match! Proceed with modify.</strong></p>`;
+    }
+
+    html += `</div></div>`;
+    reportEl.innerHTML = html;
+    reportEl.style.display = "block";
+  }
+
   /* wire run button */
   runModifyBtn.addEventListener("click", async () => {
     const src = sourceInput.files && sourceInput.files[0] ? sourceInput.files[0] : null;
     const tgt = targetInput.files && targetInput.files[0] ? targetInput.files[0] : null;
     console.log("Run modify: src=", src && src.name, "tgt=", tgt && tgt.name);
-    await modifyAndDownloadExactMatch_MOD({ sourceFileObj: src, targetFileObj: tgt });
+    
+    if (!src || !tgt) {
+      alert("Please provide both SFTP and DutiesHeader files.");
+      return;
+    }
+
+    try {
+      // Run 8308 analysis first
+      const analysisResult = await analyze8308ValueForDuty(src, tgt);
+      renderModifyReport(analysisResult);
+
+      if (analysisResult.success) {
+        // Ask for confirmation if there are mismatches
+        if (analysisResult.mismatches.length > 0) {
+          const confirm = window.confirm(
+            `Found ${analysisResult.mismatches.length} mismatches in 8308 Value for Duty.\n\nClick OK to proceed with modify anyway, or Cancel to review.`
+          );
+          if (!confirm) return;
+        }
+        
+        // Proceed with modify
+        await modifyAndDownloadExactMatch_MOD({ sourceFileObj: src, targetFileObj: tgt });
+      }
+    } catch (err) {
+      console.error("Error in modify flow:", err);
+      alert("Error: " + (err && err.message ? err.message : err));
+    }
   });
 
   /* wire reset button */
@@ -847,6 +1001,13 @@ function generateTimestamp12() {
     // Clear file name displays
     if(sourceFileName) sourceFileName.textContent = "";
     if(targetFileName) targetFileName.textContent = "";
+
+    // Clear report
+    const reportEl = document.getElementById("modifyReport");
+    if (reportEl) {
+      reportEl.innerHTML = "";
+      reportEl.style.display = "none";
+    }
 
     // Hide the reset button
     resetModifyBtn.style.display = "none";
@@ -1904,6 +2065,451 @@ function generateTimestamp12() {
       if (headerFileName) headerFileName.textContent = "";
       if (itemFileName) itemFileName.textContent = "";
       resetCandataBtn.style.display = "none";
+    });
+  }
+})();
+
+/**************************************************************
+ * APC D/T Item File Module
+ * - Accepts SFTP + DutiesItem files
+ * - Removes rows already represented by existing item CCNs
+ * - Appends remaining CLVS rows into the item workbook
+ **************************************************************/
+(function ApcDtItemModule() {
+  const apcItemForm = document.getElementById("apcItemForm");
+  const apcSourceDrop = document.getElementById("apcSourceDropZone");
+  const apcSourceInput = document.getElementById("apcSourceFileInput");
+  const apcSourceFileName = document.getElementById("apcSourceFileName");
+  const apcItemDrop = document.getElementById("apcItemDropZone");
+  const apcItemInput = document.getElementById("apcItemFileInput");
+  const apcItemFileName = document.getElementById("apcItemFileName");
+  const runApcItemBtn = document.getElementById("runApcItem");
+  const resetApcItemBtn = document.getElementById("resetApcItemBtn");
+
+  if (!apcItemForm || !apcSourceDrop || !apcSourceInput || !apcItemDrop || !apcItemInput || !runApcItemBtn) return;
+
+  const ADDED_HEADERS_APC = [
+    "Buyer Name",
+    "Buyer Address",
+    "Buyer City",
+    "Buyer Postal Code",
+    "Buyer Province",
+    "Order Number"
+  ];
+
+  function syncApcItemButtonState() {
+    const hasSource = !!(apcSourceInput.files && apcSourceInput.files[0]);
+    const hasItem = !!(apcItemInput.files && apcItemInput.files[0]);
+    runApcItemBtn.disabled = !(hasSource && hasItem);
+  }
+
+  function setupDropZone_APC(dropArea, fileInput, fileNameDisplay) {
+    dropArea.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      dropArea.classList.add("dragover");
+    });
+
+    dropArea.addEventListener("dragleave", () => dropArea.classList.remove("dragover"));
+
+    dropArea.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropArea.classList.remove("dragover");
+      const f = e.dataTransfer.files && e.dataTransfer.files[0];
+      if (!f) return;
+      if (!f.name.toLowerCase().endsWith(".xlsx")) {
+        alert("Please drop a .xlsx file");
+        return;
+      }
+      try {
+        const dt = new DataTransfer();
+        dt.items.add(f);
+        fileInput.files = dt.files;
+      } catch (err) { /* ignore */ }
+      if (fileNameDisplay) fileNameDisplay.textContent = f.name;
+      syncApcItemButtonState();
+    });
+
+    dropArea.addEventListener("click", () => fileInput.click());
+
+    fileInput.addEventListener("change", (e) => {
+      const f = e.target.files && e.target.files[0];
+      if (!f) {
+        if (fileNameDisplay) fileNameDisplay.textContent = "";
+        syncApcItemButtonState();
+        return;
+      }
+      if (!f.name.toLowerCase().endsWith(".xlsx")) {
+        alert("Please select a .xlsx file");
+        e.target.value = "";
+        syncApcItemButtonState();
+        return;
+      }
+      if (fileNameDisplay) fileNameDisplay.textContent = f.name;
+      syncApcItemButtonState();
+    });
+  }
+
+  setupDropZone_APC(apcSourceDrop, apcSourceInput, apcSourceFileName);
+  setupDropZone_APC(apcItemDrop, apcItemInput, apcItemFileName);
+  syncApcItemButtonState();
+
+  async function readExcelFile_APC(file) {
+    return new Promise((resolve, reject) => {
+      if (!file) return resolve([]);
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = e.target.result;
+          const wb = XLSX.read(data, { type: "binary", cellDates: true });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: "" });
+          resolve(rows);
+        } catch (err) {
+          reject(err);
+        }
+      };
+      reader.onerror = (err) => reject(err);
+      reader.readAsBinaryString(file);
+    });
+  }
+
+  function normalizeHeaderKey_APC(value) {
+    return String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
+  }
+
+  function findRequiredIndex_APC(headers, labels, contextLabel) {
+    const normalized = headers.map(normalizeHeaderKey_APC);
+    for (const label of labels) {
+      const idx = normalized.indexOf(normalizeHeaderKey_APC(label));
+      if (idx !== -1) return idx;
+    }
+    throw new Error(`${contextLabel} column not found: ${labels[0]}`);
+  }
+
+  function findLastNonEmptyRow_APC(rows) {
+    for (let i = rows.length - 1; i >= 0; i--) {
+      const row = rows[i];
+      if (!Array.isArray(row)) continue;
+      if (row.some((cell) => cell !== null && cell !== undefined && String(cell).trim() !== "")) return i;
+    }
+    return -1;
+  }
+
+  function generateTimestamp12_APC() {
+    const now = new Date();
+    const yy = String(now.getFullYear()).slice(-2);
+    const MM = String(now.getMonth() + 1).padStart(2, "0");
+    const dd = String(now.getDate()).padStart(2, "0");
+    const HH = String(now.getHours()).padStart(2, "0");
+    const mm = String(now.getMinutes()).padStart(2, "0");
+    const ss = String(now.getSeconds()).padStart(2, "0");
+    return yy + MM + dd + HH + mm + ss;
+  }
+
+  function parseNumberFromCell_APC(value) {
+    if (value === undefined || value === null) return null;
+    let s = String(value).trim();
+    if (s === "") return null;
+    if (/^\$?\s*-\s*\$?$/.test(s)) return 0;
+
+    let neg = false;
+    if (s.startsWith("(") && s.endsWith(")")) {
+      neg = true;
+      s = s.slice(1, -1);
+    }
+    if (s.endsWith("-")) {
+      neg = true;
+      s = s.slice(0, -1);
+    }
+
+    s = s.replace(/[$,]/g, "").replace(/\s+/g, "");
+    if (s === "") return null;
+    if (s === "-") return 0;
+
+    const num = parseFloat(s);
+    if (isNaN(num)) return null;
+    return neg ? -num : num;
+  }
+
+  function setWorksheetNumber_APC(ws, r, c, value) {
+    const ref = XLSX.utils.encode_cell({ r, c });
+    ws[ref] = { t: "n", v: value, z: "General" };
+  }
+
+  function sanitizeExcelText_APC(value) {
+    const s = String(value ?? "").trim();
+    if (!s) return "";
+    return /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
+  }
+
+  function normalizeExistingItemCCN_APC(raw) {
+    const value = String(raw ?? "").trim();
+    if (!value) return "";
+    return value.startsWith("8308") ? value.slice(4) : value;
+  }
+
+  function insertColumnsAfterIndex_APC(row, afterIndex, count, fillValue = "") {
+    const source = Array.isArray(row) ? row.slice() : [];
+    const before = source.slice(0, afterIndex + 1);
+    const after = source.slice(afterIndex + 1);
+    return before.concat(new Array(count).fill(fillValue), after);
+  }
+
+  function ensureBuyerColumnsAfterCCN_APC(rows, ccnIndex) {
+    const workingRows = rows.map((row) => Array.isArray(row) ? row.slice() : []);
+    const headerRow = workingRows[4] || [];
+    const existingHeaders = headerRow.slice(ccnIndex + 1, ccnIndex + 1 + ADDED_HEADERS_APC.length);
+    const exactMatch = ADDED_HEADERS_APC.every((label, idx) => String(existingHeaders[idx] || "").trim() === label);
+
+    const finalRows = exactMatch
+      ? workingRows
+      : workingRows.map((row) => insertColumnsAfterIndex_APC(row, ccnIndex, ADDED_HEADERS_APC.length, ""));
+
+    const finalHeaderRow = finalRows[4] || [];
+    for (let i = 0; i < ADDED_HEADERS_APC.length; i++) {
+      finalHeaderRow[ccnIndex + 1 + i] = ADDED_HEADERS_APC[i];
+    }
+    finalRows[4] = finalHeaderRow;
+
+    return {
+      rows: finalRows,
+      indexes: {
+        buyerName: ccnIndex + 1,
+        buyerAddress: ccnIndex + 2,
+        buyerCity: ccnIndex + 3,
+        buyerPostalCode: ccnIndex + 4,
+        buyerProvince: ccnIndex + 5,
+        orderNumber: ccnIndex + 6
+      }
+    };
+  }
+
+  function buildOutputFileName_APC(inputName) {
+    let outName = String(inputName || "").trim() || "updated_item.xlsx";
+    const stampRegex = /(\d{12})(?=_DutiesItem)/i;
+    const newStamp = generateTimestamp12_APC();
+
+    if (/_DutiesItem/i.test(outName)) {
+      if (stampRegex.test(outName)) {
+        outName = outName.replace(stampRegex, newStamp);
+      } else {
+        outName = outName.replace(/_DutiesItem/i, `${newStamp}_DutiesItem`);
+      }
+      return outName;
+    }
+
+    const dotIdx = outName.lastIndexOf(".");
+    const base = dotIdx === -1 ? outName : outName.slice(0, dotIdx);
+    const ext = dotIdx === -1 ? ".xlsx" : outName.slice(dotIdx);
+    return `${base}_${newStamp}${ext}`;
+  }
+
+  function buildApcItemRow_APC(sourceRow, sftpIndexes, outputIndexes, rowLength) {
+    const row = new Array(rowLength).fill("");
+    row[outputIndexes.transactionNumber] = "CLVS";
+    row[outputIndexes.goodsDescription] = sanitizeExcelText_APC(sourceRow[sftpIndexes.goodsDescription]);
+    row[outputIndexes.lineNumber] = sanitizeExcelText_APC(sourceRow[sftpIndexes.packageNo]);
+    row[outputIndexes.countryOfOrigin] = sanitizeExcelText_APC(sourceRow[sftpIndexes.countryOfOrigin]);
+    row[outputIndexes.tariffTreatment] = "";
+    row[outputIndexes.partNumber] = sanitizeExcelText_APC(sourceRow[sftpIndexes.productPart]);
+    row[outputIndexes.quantity] = sourceRow[sftpIndexes.quantity];
+    row[outputIndexes.port] = sanitizeExcelText_APC(sourceRow[sftpIndexes.cbsaPort]);
+    row[outputIndexes.vendorName] = sanitizeExcelText_APC(sourceRow[sftpIndexes.sellerName]);
+    row[outputIndexes.valueForDuty] = sourceRow[sftpIndexes.totalValueOfParcel];
+    row[outputIndexes.hs] = sanitizeExcelText_APC(sourceRow[sftpIndexes.hsCode]);
+    row[outputIndexes.dutyRate] = 0;
+    row[outputIndexes.duty] = 0;
+    row[outputIndexes.valueForTax] = sourceRow[sftpIndexes.totalValueOfParcel];
+    row[outputIndexes.gst] = 0;
+    row[outputIndexes.incoTerms] = sanitizeExcelText_APC(sourceRow[sftpIndexes.incoTerm]);
+    row[outputIndexes.ccn] = sanitizeExcelText_APC(sourceRow[sftpIndexes.reliableTracking]);
+    row[outputIndexes.buyerName] = sanitizeExcelText_APC(sourceRow[sftpIndexes.buyerName]);
+    row[outputIndexes.buyerAddress] = sanitizeExcelText_APC(sourceRow[sftpIndexes.buyerAddress]);
+    row[outputIndexes.buyerCity] = sanitizeExcelText_APC(sourceRow[sftpIndexes.buyerCity]);
+    row[outputIndexes.buyerPostalCode] = sanitizeExcelText_APC(sourceRow[sftpIndexes.buyerPostalCode]);
+    row[outputIndexes.buyerProvince] = sanitizeExcelText_APC(sourceRow[sftpIndexes.buyerProvince]);
+    row[outputIndexes.orderNumber] = sanitizeExcelText_APC(sourceRow[sftpIndexes.orderNumber]);
+    return row;
+  }
+
+  async function runApcItemConversion() {
+    try {
+      const sourceFileObj = apcSourceInput.files && apcSourceInput.files[0] ? apcSourceInput.files[0] : null;
+      const targetFileObj = apcItemInput.files && apcItemInput.files[0] ? apcItemInput.files[0] : null;
+      if (!sourceFileObj || !targetFileObj) {
+        alert("Please provide both SFTP and DutiesItem files.");
+        return;
+      }
+
+      const itemRowsRaw = await readExcelFile_APC(targetFileObj);
+      const sftpRowsRaw = await readExcelFile_APC(sourceFileObj);
+      const itemRows = Array.isArray(itemRowsRaw) ? itemRowsRaw.map((row) => Array.isArray(row) ? row.slice() : []) : [];
+      const sftpRows = Array.isArray(sftpRowsRaw) ? sftpRowsRaw : [];
+
+      if (!itemRows.length || !sftpRows.length) {
+        throw new Error("Unable to read workbook data.");
+      }
+
+      const itemHeaderRow = itemRows[4];
+      const sftpHeaderRow = sftpRows[0];
+      if (!Array.isArray(itemHeaderRow)) throw new Error("Item file header row 5 not found.");
+      if (!Array.isArray(sftpHeaderRow)) throw new Error("SFTP header row not found.");
+
+      const itemIndexes = {
+        transactionNumber: findRequiredIndex_APC(itemHeaderRow, ["Transaction Number"], "Item"),
+        goodsDescription: findRequiredIndex_APC(itemHeaderRow, ["Goods Description"], "Item"),
+        lineNumber: findRequiredIndex_APC(itemHeaderRow, ["Line #", "Line"], "Item"),
+        countryOfOrigin: findRequiredIndex_APC(itemHeaderRow, ["Country of Origin"], "Item"),
+        tariffTreatment: findRequiredIndex_APC(itemHeaderRow, ["Tariff Treatment"], "Item"),
+        partNumber: findRequiredIndex_APC(itemHeaderRow, ["Part Number"], "Item"),
+        quantity: findRequiredIndex_APC(itemHeaderRow, ["Quantity"], "Item"),
+        port: findRequiredIndex_APC(itemHeaderRow, ["Port #", "Port"], "Item"),
+        vendorName: findRequiredIndex_APC(itemHeaderRow, ["Vendor Name"], "Item"),
+        valueForDuty: findRequiredIndex_APC(itemHeaderRow, ["Value for Duty"], "Item"),
+        hs: findRequiredIndex_APC(itemHeaderRow, ["HS #", "HS"], "Item"),
+        dutyRate: findRequiredIndex_APC(itemHeaderRow, ["Duty Rate"], "Item"),
+        duty: findRequiredIndex_APC(itemHeaderRow, ["Duty"], "Item"),
+        valueForTax: findRequiredIndex_APC(itemHeaderRow, ["Value for Tax"], "Item"),
+        gst: findRequiredIndex_APC(itemHeaderRow, ["Gov. Sales Tax"], "Item"),
+        incoTerms: findRequiredIndex_APC(itemHeaderRow, ["Inco Terms"], "Item"),
+        ccn: findRequiredIndex_APC(itemHeaderRow, ["CCN"], "Item")
+      };
+
+      const sftpIndexes = {
+        reliableTracking: findRequiredIndex_APC(sftpHeaderRow, ["Reliable_tracking"], "SFTP"),
+        goodsDescription: findRequiredIndex_APC(sftpHeaderRow, ["Goods_Description"], "SFTP"),
+        packageNo: findRequiredIndex_APC(sftpHeaderRow, ["Package_no"], "SFTP"),
+        countryOfOrigin: findRequiredIndex_APC(sftpHeaderRow, ["Country_of_origin"], "SFTP"),
+        productPart: findRequiredIndex_APC(sftpHeaderRow, ["Product_part"], "SFTP"),
+        quantity: findRequiredIndex_APC(sftpHeaderRow, ["Quantity"], "SFTP"),
+        cbsaPort: findRequiredIndex_APC(sftpHeaderRow, ["CBSA_Port_of_Release"], "SFTP"),
+        sellerName: findRequiredIndex_APC(sftpHeaderRow, ["Seller_name"], "SFTP"),
+        totalValueOfParcel: findRequiredIndex_APC(sftpHeaderRow, ["Total_value_of_parcel"], "SFTP"),
+        hsCode: findRequiredIndex_APC(sftpHeaderRow, ["HS_code"], "SFTP"),
+        incoTerm: findRequiredIndex_APC(sftpHeaderRow, ["Inco_term"], "SFTP"),
+        buyerName: findRequiredIndex_APC(sftpHeaderRow, ["Buyer_name"], "SFTP"),
+        buyerAddress: findRequiredIndex_APC(sftpHeaderRow, ["Buyer_address"], "SFTP"),
+        buyerCity: findRequiredIndex_APC(sftpHeaderRow, ["Buyer_city"], "SFTP"),
+        buyerPostalCode: findRequiredIndex_APC(sftpHeaderRow, ["Buyer_postal_code"], "SFTP"),
+        buyerProvince: findRequiredIndex_APC(sftpHeaderRow, ["Buyer_province"], "SFTP"),
+        orderNumber: findRequiredIndex_APC(sftpHeaderRow, ["Order_number"], "SFTP")
+      };
+
+      const existingKeySet = new Set();
+      const itemLastNonEmptyIndex = findLastNonEmptyRow_APC(itemRows);
+      const itemDataEnd = itemLastNonEmptyIndex >= 0 ? itemLastNonEmptyIndex : itemRows.length - 1;
+      for (let r = 5; r <= itemDataEnd; r++) {
+        const row = itemRows[r] || [];
+        const key = normalizeExistingItemCCN_APC(row[itemIndexes.ccn]);
+        if (key) existingKeySet.add(key);
+      }
+
+      const filteredSftpRows = [];
+      for (let r = 2; r < sftpRows.length; r++) {
+        const row = sftpRows[r] || [];
+        const reliableTracking = String(row[sftpIndexes.reliableTracking] ?? "").trim();
+        if (!reliableTracking) continue;
+        if (existingKeySet.has(reliableTracking)) continue;
+        filteredSftpRows.push(row);
+      }
+
+      const ensuredColumns = ensureBuyerColumnsAfterCCN_APC(itemRows, itemIndexes.ccn);
+      const expandedItemRows = ensuredColumns.rows;
+      const outputIndexes = {
+        transactionNumber: itemIndexes.transactionNumber,
+        goodsDescription: itemIndexes.goodsDescription,
+        lineNumber: itemIndexes.lineNumber,
+        countryOfOrigin: itemIndexes.countryOfOrigin,
+        tariffTreatment: itemIndexes.tariffTreatment,
+        partNumber: itemIndexes.partNumber,
+        quantity: itemIndexes.quantity,
+        port: itemIndexes.port,
+        vendorName: itemIndexes.vendorName,
+        valueForDuty: itemIndexes.valueForDuty,
+        hs: itemIndexes.hs,
+        dutyRate: itemIndexes.dutyRate,
+        duty: itemIndexes.duty,
+        valueForTax: itemIndexes.valueForTax,
+        gst: itemIndexes.gst,
+        incoTerms: itemIndexes.incoTerms,
+        ccn: itemIndexes.ccn,
+        buyerName: ensuredColumns.indexes.buyerName,
+        buyerAddress: ensuredColumns.indexes.buyerAddress,
+        buyerCity: ensuredColumns.indexes.buyerCity,
+        buyerPostalCode: ensuredColumns.indexes.buyerPostalCode,
+        buyerProvince: ensuredColumns.indexes.buyerProvince,
+        orderNumber: ensuredColumns.indexes.orderNumber
+      };
+
+      const rowLength = Math.max((expandedItemRows[4] || []).length, ensuredColumns.indexes.orderNumber + 1);
+      const preparedRows = expandedItemRows.map((row) => {
+        const nextRow = Array.isArray(row) ? row.slice() : [];
+        if (nextRow.length < rowLength) nextRow.length = rowLength;
+        for (let i = 0; i < rowLength; i++) {
+          if (nextRow[i] === undefined) nextRow[i] = "";
+        }
+        return nextRow;
+      });
+
+      const appendedRows = filteredSftpRows.map((sourceRow) =>
+        buildApcItemRow_APC(sourceRow, sftpIndexes, outputIndexes, rowLength)
+      );
+
+      const insertAt = itemLastNonEmptyIndex >= 0 ? itemLastNonEmptyIndex + 1 : preparedRows.length;
+      const finalAoA = preparedRows.slice(0, insertAt).concat(appendedRows, preparedRows.slice(insertAt));
+
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet(finalAoA);
+
+      const numericColumns = [
+        outputIndexes.quantity,
+        outputIndexes.valueForDuty,
+        outputIndexes.dutyRate,
+        outputIndexes.duty,
+        outputIndexes.valueForTax,
+        outputIndexes.gst
+      ];
+      const dataStartIndex = 5;
+      for (let r = dataStartIndex; r < finalAoA.length; r++) {
+        const row = finalAoA[r] || [];
+        for (const c of numericColumns) {
+          const num = parseNumberFromCell_APC(row[c]);
+          if (num === null) continue;
+          finalAoA[r][c] = num;
+          setWorksheetNumber_APC(ws, r, c, num);
+        }
+      }
+
+      XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+
+      const wbout = XLSX.write(wb, { bookType: "xlsx", type: "binary", compression: true, bookSST: false });
+      const s2ab = (s) => {
+        const buf = new ArrayBuffer(s.length);
+        const view = new Uint8Array(buf);
+        for (let i = 0; i < s.length; i++) view[i] = s.charCodeAt(i) & 0xff;
+        return buf;
+      };
+      downloadBlobFile(
+        new Blob([s2ab(wbout)], { type: "application/octet-stream" }),
+        buildOutputFileName_APC(targetFileObj.name)
+      );
+
+      if (resetApcItemBtn) resetApcItemBtn.style.display = "flex";
+    } catch (err) {
+      console.error("APC item conversion error:", err);
+      alert(err && err.message ? err.message : `APC item conversion failed: ${err}`);
+    }
+  }
+
+  runApcItemBtn.addEventListener("click", runApcItemConversion);
+
+  if (resetApcItemBtn) {
+    resetApcItemBtn.addEventListener("click", () => {
+      apcItemForm.reset();
+      if (apcSourceFileName) apcSourceFileName.textContent = "";
+      if (apcItemFileName) apcItemFileName.textContent = "";
+      runApcItemBtn.disabled = true;
+      resetApcItemBtn.style.display = "none";
     });
   }
 })();
