@@ -202,7 +202,7 @@ main{
   display: none; /* Hides the default file input */
 } 
 
-.custom-file-upload-label, #merge-btn, #process-btn, #downloadLink, #resetBtn, #resetModifyBtn, #resetAnalyzeBtn, #resetCandataBtn, #resetApcItemBtn {
+.custom-file-upload-label, #merge-btn, #process-btn, #downloadLink, #resetBtn, #resetModifyBtn, #resetAnalyzeBtn, #resetCandataBtn, #resetApcItemBtn, #proceedModify {
   display: inline-block; /* Makes the label behave like a button*/
   background-color: #ff581f;
   color: white;

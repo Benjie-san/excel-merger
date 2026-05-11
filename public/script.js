@@ -923,10 +923,12 @@ function generateTimestamp12() {
      ------------------------- */
   function renderModifyReport(analysisResult) {
     const reportEl = document.getElementById("modifyReport");
+    const proceedBtn = document.getElementById("proceedModify");
     if (!reportEl) return;
 
     if (!analysisResult.success) {
       reportEl.innerHTML = `<div class="analyze-report-container"><div class="analyze-8308-report"><h4>Analysis Error</h4><p>${analysisResult.error}</p></div></div>`;
+      if (proceedBtn) proceedBtn.style.display = "none";
       return;
     }
 
@@ -951,12 +953,17 @@ function generateTimestamp12() {
       }
       html += `</div></div>`;
     } else {
-      html += `<p style="color: #4ade80; margin-top: 10px;"><strong>✓ All 8308 entries match! Proceed with modify.</strong></p>`;
+      html += `<p style="color: #4ade80; margin-top: 10px;"><strong>✓ All 8308 entries match! Safe to proceed.</strong></p>`;
     }
 
     html += `</div></div>`;
     reportEl.innerHTML = html;
     reportEl.style.display = "block";
+
+    // Show proceed button
+    if (proceedBtn) {
+      proceedBtn.style.display = "inline-block";
+    }
   }
 
   /* wire run button */
@@ -971,22 +978,14 @@ function generateTimestamp12() {
     }
 
     try {
-      // Run 8308 analysis first
+      // Run 8308 analysis first and show report
       const analysisResult = await analyze8308ValueForDuty(src, tgt);
       renderModifyReport(analysisResult);
 
-      if (analysisResult.success) {
-        // Ask for confirmation if there are mismatches
-        if (analysisResult.mismatches.length > 0) {
-          const confirm = window.confirm(
-            `Found ${analysisResult.mismatches.length} mismatches in 8308 Value for Duty.\n\nClick OK to proceed with modify anyway, or Cancel to review.`
-          );
-          if (!confirm) return;
-        }
-        
-        // Proceed with modify
-        await modifyAndDownloadExactMatch_MOD({ sourceFileObj: src, targetFileObj: tgt });
+      if (!analysisResult.success) {
+        alert("Analysis failed: " + analysisResult.error);
       }
+      // Stop here - user reviews report before proceeding
     } catch (err) {
       console.error("Error in modify flow:", err);
       alert("Error: " + (err && err.message ? err.message : err));
@@ -1009,11 +1008,35 @@ function generateTimestamp12() {
       reportEl.style.display = "none";
     }
 
+    // Hide the proceed button
+    const proceedBtn = document.getElementById("proceedModify");
+    if (proceedBtn) proceedBtn.style.display = "none";
+
     // Hide the reset button
     resetModifyBtn.style.display = "none";
 
     console.log("Modify Tool has been reset.");
   });
+
+  /* wire proceed button */
+  const proceedModifyBtn = document.getElementById("proceedModify");
+  if (proceedModifyBtn) {
+    proceedModifyBtn.addEventListener("click", async () => {
+      const src = sourceInput.files && sourceInput.files[0] ? sourceInput.files[0] : null;
+      const tgt = targetInput.files && targetInput.files[0] ? targetInput.files[0] : null;
+      
+      try {
+        await modifyAndDownloadExactMatch_MOD({ sourceFileObj: src, targetFileObj: tgt });
+        // Show reset button after modify completes
+        if (resetModifyBtn) {
+          resetModifyBtn.style.display = 'flex';
+        }
+      } catch (err) {
+        console.error("modify error:", err);
+        alert("Modify error: " + (err && err.message ? err.message : err));
+      }
+    });
+  }
 
 })(); // end IIFE
 
