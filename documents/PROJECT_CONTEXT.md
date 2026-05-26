@@ -61,13 +61,28 @@ The project currently has 3 user-facing tools:
   - K..Q = `0`
   - R = `DDP`
 - Inserts rows right after last non-empty target row (avoids large blank-gap append issue).
-- Converts `Value for Duty -> Exchange Rate` to numeric General format in output.
+- Applies brokerage automation from `public/brokerage-rates.json` using `CLIENT`:
+  - `CCN` starting with `8308` => `PGA`
+  - `Transaction Number` starting with `LV` => `LVS`
+  - `Transaction Number === CLVS` => `CLVS`
+  - if client is not found in JSON, brokerage fee is left blank for classified rows
+- Overwrites `Shipment Date`, `Arrival Date`, and `Release Date` with `RPT DATE`.
+- Sets `Exchange Rate` to `0`.
+- Sorts header data rows by brokerage fee descending.
+- Converts `Value for Duty -> Exchange Rate` to numeric accounting format in output.
 - Optional DutiesItem processing:
   - ensures a `CCN` column exists
   - builds a `Transaction Number -> CCN` lookup from the modified DutiesHeader output
   - writes matching CCNs directly into DutiesItem
   - leaves unmatched transaction numbers blank
-- Auto-downloads output(s) with refreshed 12-digit timestamp before `_DutiesHeader` / `_DutiesItem` when applicable.
+- Auto-downloads output(s) using the SFTP filename base with refreshed 12-digit timestamp and `_DutiesHeader` / `_DutiesItem`.
+- Final modify report includes:
+  - inserted header row count
+  - PGA / LVS / CLVS counts
+  - header Duty and GST totals
+  - blank brokerage fee row count
+  - whether the client matched the brokerage JSON
+  - header vs item Duty/GST total match when DutiesItem is provided
 
 3. Header/Item Analyzer
 - Inputs:
@@ -99,7 +114,8 @@ The project currently has 3 user-facing tools:
 - `public/index.html`: all tool layouts and controls.
 - `public/styles.css`: layout/responsive styling, tool sections, report formatting.
 - `public/script.js`: all app behavior and Excel logic.
-- `public/dt-header-workflow.js`: shared D/T header/item normalization and CCN propagation helpers.
+- `public/dt-header-workflow.js`: shared D/T header/item normalization, brokerage automation, sorting, and summary helpers.
+- `public/brokerage-rates.json`: client-side brokerage rate lookup for D/T Header automation.
 - `views/index.ejs`: legacy minimal file, not primary UI.
 
 ## Key implementation assumptions

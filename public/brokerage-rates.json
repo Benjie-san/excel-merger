@@ -1,0 +1,499 @@
+{
+  "version": "2026-05-27",
+  "sourceWorkbook": "Test files/112-05240631/final output/RATES.xlsx",
+  "matching": {
+    "basis": "CLIENT value in A2",
+    "normalization": "trim leading/trailing spaces, collapse repeated internal spaces, compare case-insensitively in app"
+  },
+  "defaults": {
+    "pga": 0.71,
+    "lvs": 0.28
+  },
+  "groups": {
+    "china_origin": {
+      "clvs": 0.0175,
+      "clients": [
+        "233 TRANS",
+        "4PX EXPRESS",
+        "BAYCHEER",
+        "LETIAN",
+        "CAINIAO",
+        "CNE EXPRESS",
+        "FLYFLOW",
+        "GLOBE SHIP",
+        "GOTOFREIGHT",
+        "Jiayou Shanghai",
+        "PIU SHENZHEN",
+        "SF EXPRESS",
+        "SPRING GDS - AS",
+        "SPRING GDS - US",
+        "SUNYOU",
+        "Transten (Chengtian)",
+        "WISE SUPPLY CHAIN",
+        "YANWEN",
+        "YUN EXPRESS",
+        "PSE EXPRESS",
+        "ECMS",
+        "Guangzhou Jiazhong Supply Chain Co., Ltd.",
+        "MAIZHUO"
+      ]
+    },
+    "non_china_origin": {
+      "clvs": 0.085,
+      "clients": [
+        "NOVA GLOBAL",
+        "PXC PACIFIC GLOBAL",
+        "SPRING GDS - EU",
+        "SHIP ROCKET",
+        "SHIP GLOBAL EXPRESS",
+        "E-SHIPPER",
+        "MEEST",
+        "UBI CPC",
+        "I-PARCEL",
+        "GIAPHU EXPRESS",
+        "EXCEL WORLDWIDE INDIA",
+        "STRAIGHT SHIP",
+        "VINA DOWELL",
+        "OCS JAPAN",
+        "SEKO",
+        "ARAMEX",
+        "BOXC",
+        "FIRST FLIGHT",
+        "BOXC LOGISTICS",
+        "COSHIP",
+        "COUNTRYSIDE",
+        "DIGITAL SKYEX INC.",
+        "DTDC",
+        "ESHOPPEX",
+        "FLIGHT GO",
+        "INEXT",
+        "LINEX TPE",
+        "NOVA POSHTA",
+        "MOF LOGISTICS",
+        "H3 NETWORKS",
+        "Wiseway logistics",
+        "DAAKIYAWALA43",
+        "43 LOGISTICS",
+        "SKYNET / SKYQUICK",
+        "SPRING GDS - AU",
+        "EPOST GLOBAL",
+        "DHL ECommerce LA",
+        "LOGASIA"
+      ]
+    }
+  },
+  "overrides": {
+    "FEDEX": {
+      "clvs": 0.35,
+      "lvs": 0.35,
+      "pga": 0.5
+    },
+    "PB UK": {
+      "clvs": 0.12,
+      "lvs": 0.12,
+      "pga": 0.28
+    },
+    "ECMS GROUND": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.0175
+    },
+    "AMAZON": {
+      "clvs": 0.115,
+      "lvs": 0.115,
+      "pga": 0.115
+    }
+  },
+  "clientRateLookup": {
+    "233 TRANS": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.0175,
+      "source": "group:china_origin"
+    },
+    "4PX EXPRESS": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.0175,
+      "source": "group:china_origin"
+    },
+    "BAYCHEER": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.0175,
+      "source": "group:china_origin"
+    },
+    "LETIAN": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.0175,
+      "source": "group:china_origin"
+    },
+    "CAINIAO": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.0175,
+      "source": "group:china_origin"
+    },
+    "CNE EXPRESS": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.0175,
+      "source": "group:china_origin"
+    },
+    "FLYFLOW": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.0175,
+      "source": "group:china_origin"
+    },
+    "GLOBE SHIP": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.0175,
+      "source": "group:china_origin"
+    },
+    "GOTOFREIGHT": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.0175,
+      "source": "group:china_origin"
+    },
+    "Jiayou Shanghai": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.0175,
+      "source": "group:china_origin"
+    },
+    "PIU SHENZHEN": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.0175,
+      "source": "group:china_origin"
+    },
+    "SF EXPRESS": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.0175,
+      "source": "group:china_origin"
+    },
+    "SPRING GDS - AS": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.0175,
+      "source": "group:china_origin"
+    },
+    "SPRING GDS - US": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.0175,
+      "source": "group:china_origin"
+    },
+    "SUNYOU": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.0175,
+      "source": "group:china_origin"
+    },
+    "Transten (Chengtian)": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.0175,
+      "source": "group:china_origin"
+    },
+    "WISE SUPPLY CHAIN": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.0175,
+      "source": "group:china_origin"
+    },
+    "YANWEN": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.0175,
+      "source": "group:china_origin"
+    },
+    "YUN EXPRESS": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.0175,
+      "source": "group:china_origin"
+    },
+    "PSE EXPRESS": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.0175,
+      "source": "group:china_origin"
+    },
+    "ECMS": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.0175,
+      "source": "group:china_origin"
+    },
+    "Guangzhou Jiazhong Supply Chain Co., Ltd.": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.0175,
+      "source": "group:china_origin"
+    },
+    "MAIZHUO": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.0175,
+      "source": "group:china_origin"
+    },
+    "NOVA GLOBAL": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.085,
+      "source": "group:non_china_origin"
+    },
+    "PXC PACIFIC GLOBAL": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.085,
+      "source": "group:non_china_origin"
+    },
+    "SPRING GDS - EU": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.085,
+      "source": "group:non_china_origin"
+    },
+    "SHIP ROCKET": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.085,
+      "source": "group:non_china_origin"
+    },
+    "SHIP GLOBAL EXPRESS": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.085,
+      "source": "group:non_china_origin"
+    },
+    "E-SHIPPER": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.085,
+      "source": "group:non_china_origin"
+    },
+    "MEEST": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.085,
+      "source": "group:non_china_origin"
+    },
+    "UBI CPC": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.085,
+      "source": "group:non_china_origin"
+    },
+    "I-PARCEL": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.085,
+      "source": "group:non_china_origin"
+    },
+    "GIAPHU EXPRESS": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.085,
+      "source": "group:non_china_origin"
+    },
+    "EXCEL WORLDWIDE INDIA": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.085,
+      "source": "group:non_china_origin"
+    },
+    "STRAIGHT SHIP": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.085,
+      "source": "group:non_china_origin"
+    },
+    "VINA DOWELL": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.085,
+      "source": "group:non_china_origin"
+    },
+    "OCS JAPAN": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.085,
+      "source": "group:non_china_origin"
+    },
+    "SEKO": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.085,
+      "source": "group:non_china_origin"
+    },
+    "ARAMEX": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.085,
+      "source": "group:non_china_origin"
+    },
+    "BOXC": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.085,
+      "source": "group:non_china_origin"
+    },
+    "FIRST FLIGHT": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.085,
+      "source": "group:non_china_origin"
+    },
+    "BOXC LOGISTICS": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.085,
+      "source": "group:non_china_origin"
+    },
+    "COSHIP": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.085,
+      "source": "group:non_china_origin"
+    },
+    "COUNTRYSIDE": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.085,
+      "source": "group:non_china_origin"
+    },
+    "DIGITAL SKYEX INC.": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.085,
+      "source": "group:non_china_origin"
+    },
+    "DTDC": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.085,
+      "source": "group:non_china_origin"
+    },
+    "ESHOPPEX": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.085,
+      "source": "group:non_china_origin"
+    },
+    "FLIGHT GO": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.085,
+      "source": "group:non_china_origin"
+    },
+    "INEXT": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.085,
+      "source": "group:non_china_origin"
+    },
+    "LINEX TPE": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.085,
+      "source": "group:non_china_origin"
+    },
+    "NOVA POSHTA": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.085,
+      "source": "group:non_china_origin"
+    },
+    "MOF LOGISTICS": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.085,
+      "source": "group:non_china_origin"
+    },
+    "H3 NETWORKS": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.085,
+      "source": "group:non_china_origin"
+    },
+    "Wiseway logistics": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.085,
+      "source": "group:non_china_origin"
+    },
+    "DAAKIYAWALA43": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.085,
+      "source": "group:non_china_origin"
+    },
+    "43 LOGISTICS": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.085,
+      "source": "group:non_china_origin"
+    },
+    "SKYNET / SKYQUICK": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.085,
+      "source": "group:non_china_origin"
+    },
+    "SPRING GDS - AU": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.085,
+      "source": "group:non_china_origin"
+    },
+    "EPOST GLOBAL": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.085,
+      "source": "group:non_china_origin"
+    },
+    "DHL ECommerce LA": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.085,
+      "source": "group:non_china_origin"
+    },
+    "LOGASIA": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.085,
+      "source": "group:non_china_origin"
+    },
+    "FEDEX": {
+      "pga": 0.5,
+      "lvs": 0.35,
+      "clvs": 0.35,
+      "source": "override"
+    },
+    "PB UK": {
+      "pga": 0.28,
+      "lvs": 0.12,
+      "clvs": 0.12,
+      "source": "override"
+    },
+    "ECMS GROUND": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.0175,
+      "source": "override"
+    },
+    "AMAZON": {
+      "pga": 0.115,
+      "lvs": 0.115,
+      "clvs": 0.115,
+      "source": "override"
+    }
+  }
+}

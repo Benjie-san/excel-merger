@@ -548,6 +548,8 @@ function generateTimestamp12() {
   const proceedModifyBtn = document.getElementById("proceedModify");
   const resetModifyBtn = document.getElementById("resetModifyBtn");
   const reportEl = document.getElementById("modifyReport");
+  const ACCOUNTING_FORMAT_MOD = '_("$"* #,##0.00_);_("$"* (#,##0.00);_("$"* "-"??_);_(@_)';
+  let brokerageRatesPromise = null;
 
   if (!workflow || !modifyForm || !sourceDrop || !targetDrop || !runModifyBtn || !proceedModifyBtn || !resetModifyBtn) {
     return;
@@ -636,9 +638,9 @@ function generateTimestamp12() {
     });
   }
 
-  function setWorksheetNumber(ws, r, c, value) {
+  function setWorksheetNumber(ws, r, c, value, format) {
     const ref = XLSX.utils.encode_cell({ r, c });
-    ws[ref] = { t: "n", v: value, z: "General" };
+    ws[ref] = { t: "n", v: value, z: format || "General" };
   }
 
   function parseNumberFromCell_MOD(value) {
@@ -684,10 +686,23 @@ function generateTimestamp12() {
     return s;
   }
 
+  async function loadBrokerageRates_MOD() {
+    if (!brokerageRatesPromise) {
+      brokerageRatesPromise = fetch("brokerage-rates.json", { cache: "no-store" }).then(async (response) => {
+        if (!response.ok) {
+          throw new Error(`Unable to load brokerage rates JSON (${response.status}).`);
+        }
+        return response.json();
+      });
+    }
+    return brokerageRatesPromise;
+  }
+
   function buildOutputName_MOD(fileName, marker) {
     const newStamp = generateTimestamp12_MOD();
     const stampRegex = new RegExp(`(\\d{12})(?=${marker})`, "i");
     const markerRegex = new RegExp(marker, "i");
+    const sourceStampRegex = /_(\d{12})(?=\.[^.]+$)/i;
 
     if (markerRegex.test(fileName)) {
       if (stampRegex.test(fileName)) {
@@ -699,7 +714,10 @@ function generateTimestamp12() {
     const dotIdx = fileName.lastIndexOf(".");
     const base = dotIdx === -1 ? fileName : fileName.slice(0, dotIdx);
     const ext = dotIdx === -1 ? ".xlsx" : fileName.slice(dotIdx);
-    return `${base}_${newStamp}${ext}`;
+    if (sourceStampRegex.test(fileName)) {
+      return fileName.replace(sourceStampRegex, `_${newStamp}${marker}`);
+    }
+    return `${base}_${newStamp}${marker}${ext}`;
   }
 
   function downloadWorkbookFromRows_MOD(rows, fileName, numericConfig) {
@@ -712,7 +730,7 @@ function generateTimestamp12() {
         for (let c = numericConfig.startColIndex; c <= numericConfig.endColIndex; c++) {
           const num = parseNumberFromCell_MOD(row[c]);
           if (num !== null) {
-            setWorksheetNumber(ws, r, c, num);
+            setWorksheetNumber(ws, r, c, num, numericConfig.format);
           }
         }
       }
@@ -851,8 +869,29 @@ function generateTimestamp12() {
     return {
       startRowIndex: headerRowIndex + 1,
       startColIndex: colStart,
-      endColIndex: colEnd
+      endColIndex: colEnd,
+      format: ACCOUNTING_FORMAT_MOD
     };
+  }
+
+  function formatReportNumber_MOD(value) {
+    if (value === undefined || value === null || Number.isNaN(Number(value))) {
+      return "-";
+    }
+    return Number(value).toFixed(2);
+  }
+
+  function escapeHtml_MOD(input) {
+    return String(input)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function describeTotalsMatch_MOD(label, headerValue, itemValue, matched) {
+    return `Header ${formatReportNumber_MOD(headerValue)} vs Item ${formatReportNumber_MOD(itemValue)} (${matched ? "Matched" : "Not Matched"})`;
   }
 
   async function analyze8308ValueForDuty(sourceFileObj, targetFileObj) {
@@ -996,34 +1035,77 @@ function generateTimestamp12() {
 
   function renderModifyCompletion(summary) {
     if (!reportEl) return;
-    const itemSummary = summary.itemGenerated
-      ? `<p><strong>DutiesItem:</strong> downloaded${summary.unmatchedItemCount > 0 ? ` with ${summary.unmatchedItemCount} unmatched transaction number(s) left blank` : ""}.</p>`
-      : `<p><strong>DutiesItem:</strong> not provided.</p>`;
-    reportEl.innerHTML = `<div class="analyze-report-container"><div class="analyze-8308-report"><h4>Modify Complete</h4><p><strong>DutiesHeader:</strong> downloaded with ${summary.insertedCount} new row(s).</p>${itemSummary}</div></div>`;
+    const header = summary.header || {};
+    const item = summary.item || null;
+    const compare = summary.compare || {};
+    const clientStatus = summary.clientMatched
+      ? `Matched rate profile: ${escapeHtml_MOD(summary.clientKey || "CLIENT")}.`
+      : "Client not found in brokerage JSON. Classified brokerage fee cells were left blank.";
+    const itemStatus = summary.itemGenerated
+      ? `Downloaded${summary.unmatchedItemCount > 0 ? ` with ${summary.unmatchedItemCount} unmatched transaction number(s) left blank` : ""}.`
+      : "Not provided.";
+
+    reportEl.innerHTML = `
+      <div class="analyze-report-container">
+        <div class="analyze-report-grid header-only">
+          <div class="analyze-report-col">
+            <h4>Modify Complete</h4>
+            <p><b>DutiesHeader:</b> downloaded with ${summary.insertedCount || 0} new row(s).</p>
+            <p><b>DutiesItem:</b> ${itemStatus}</p>
+            <p><b>Brokerage Mapping:</b> ${clientStatus}</p>
+            <p><b>Blank Brokerage Fee Rows:</b> ${header.blankBrokerageCount ?? "-"}</p>
+          </div>
+          <div class="analyze-report-col">
+            <h4>Header Totals</h4>
+            <p><b>Total PGA:</b> ${(header.counts && header.counts.pga) ?? "-"}</p>
+            <p><b>Total LVS:</b> ${(header.counts && header.counts.lvs) ?? "-"}</p>
+            <p><b>Total CLVS:</b> ${(header.counts && header.counts.clvs) ?? "-"}</p>
+            <p><b>Total Duty:</b> ${formatReportNumber_MOD(header.totalDutyValue)}</p>
+            <p><b>Total GST:</b> ${formatReportNumber_MOD(header.totalGstValue)}</p>
+          </div>
+        </div>
+        ${
+          summary.itemGenerated && item
+            ? `
+        <hr>
+        <div class="analyze-report-compare">
+          <h4>Header vs Item Totals</h4>
+          <p><b>Duty Totals:</b> ${describeTotalsMatch_MOD("Duty", header.totalDutyValue, item.totalDutyValue, !!compare.dutyMatch)}</p>
+          <p><b>GST Totals:</b> ${describeTotalsMatch_MOD("GST", header.totalGstValue, item.totalGstValue, !!compare.gstMatch)}</p>
+        </div>
+        `
+            : ""
+        }
+      </div>
+    `;
     reportEl.style.display = "block";
   }
 
   async function runModifyWorkflow_MOD() {
     const { metadata, sourceFile, targetFile, itemFile } = validateModifyInputs_MOD();
+    const brokerageRates = await loadBrokerageRates_MOD();
     const sourceRows = await readExcelFile_MOD(sourceFile);
     const targetRows = await readExcelFile_MOD(targetFile);
     const preparedHeader = workflow.prepareHeaderRowsForModify({
       targetRows,
       metadata
     });
-    const modifiedHeader = await buildModifiedHeaderRows_MOD({
+    const modifiedHeader = workflow.applyBrokerageAutomation({
       sourceRows,
-      preparedHeader
+      preparedHeader,
+      metadata,
+      brokerageRates
     });
 
     downloadWorkbookFromRows_MOD(
       modifiedHeader.rows,
-      buildOutputName_MOD(targetFile.name || "updated_target.xlsx", "_DutiesHeader"),
+      buildOutputName_MOD(sourceFile.name || "updated_source.xlsx", "_DutiesHeader"),
       buildHeaderNumericConfig_MOD(modifiedHeader.rows, modifiedHeader.headerRowIndex)
     );
 
     let unmatchedItemCount = 0;
     let itemGenerated = false;
+    let itemRowsOutput = null;
     if (itemFile) {
       const itemRows = await readExcelFile_MOD(itemFile);
       const preparedItem = workflow.prepareItemRowsWithCcn({
@@ -1036,14 +1118,25 @@ function generateTimestamp12() {
       });
       downloadWorkbookFromRows_MOD(
         preparedItem.rows,
-        buildOutputName_MOD(itemFile.name || "updated_item.xlsx", "_DutiesItem")
+        buildOutputName_MOD(sourceFile.name || "updated_source.xlsx", "_DutiesItem")
       );
       unmatchedItemCount = preparedItem.unmatchedCount;
       itemGenerated = true;
+      itemRowsOutput = preparedItem.rows;
     }
+
+    const outputSummary = workflow.summarizeDtOutputs({
+      headerRows: modifiedHeader.rows,
+      itemRows: itemRowsOutput
+    });
 
     renderModifyCompletion({
       insertedCount: modifiedHeader.insertedCount,
+      header: modifiedHeader.summary,
+      item: outputSummary.item,
+      compare: outputSummary.compare,
+      clientMatched: modifiedHeader.summary.clientMatched,
+      clientKey: modifiedHeader.summary.clientKey,
       itemGenerated,
       unmatchedItemCount
     });
