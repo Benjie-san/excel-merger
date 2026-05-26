@@ -497,11 +497,11 @@ function runDtHeaderWorkflowRegression(rootDir) {
     issues.push(`Header report date should remain text, got type ${typeof ((actualHeaderRows[2] || [])[1])}`);
   }
 
-  let actualItemRows;
+  let actualItemResult;
   try {
-    actualItemRows = prepareItemRowsWithCcn({
+    actualItemResult = prepareItemRowsWithCcn({
       itemRows: cloneRows(row4ItemRows),
-      headerRows: actualHeaderResult,
+      preparedHeader: actualHeaderResult,
       metadata
     });
   } catch (err) {
@@ -510,19 +510,19 @@ function runDtHeaderWorkflowRegression(rootDir) {
     };
   }
 
-  if (!actualItemRows || typeof actualItemRows !== "object" || !Array.isArray(actualItemRows.rows)) {
+  if (!actualItemResult || typeof actualItemResult !== "object" || !Array.isArray(actualItemResult.rows)) {
     issues.push("prepareItemRowsWithCcn should return an object with rows.");
   }
   if (issues.length) return { issues };
 
-  if (actualItemRows.headerRowIndex !== 4) {
-    issues.push(`prepareItemRowsWithCcn should expose normalized headerRowIndex=4, got ${JSON.stringify(actualItemRows.headerRowIndex)}`);
+  if (actualItemResult.headerRowIndex !== 4) {
+    issues.push(`prepareItemRowsWithCcn should expose normalized headerRowIndex=4, got ${JSON.stringify(actualItemResult.headerRowIndex)}`);
   }
-  if (typeof actualItemRows.unmatchedCount !== "number") {
-    issues.push(`prepareItemRowsWithCcn should expose numeric unmatchedCount, got ${typeof actualItemRows.unmatchedCount}`);
+  if (typeof actualItemResult.unmatchedCount !== "number") {
+    issues.push(`prepareItemRowsWithCcn should expose numeric unmatchedCount, got ${typeof actualItemResult.unmatchedCount}`);
   }
 
-  actualItemRows = actualItemRows.rows;
+  const actualItemRows = actualItemResult.rows;
 
   if (String((actualItemRows[0] || [])[1] || "").trim() !== metadata.client) {
     issues.push(`Item metadata client mismatch: got ${JSON.stringify((actualItemRows[0] || [])[1] || "")}`);

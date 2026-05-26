@@ -178,7 +178,8 @@
 
   function prepareItemRowsWithCcn(options) {
     var rows = cloneRows(options && options.itemRows);
-    var normalizedHeader = normalizePreparedHeaderInput(options && options.headerRows);
+    var headerInput = options && (options.preparedHeader || options.headerInput || options.headerRows);
+    var normalizedHeader = normalizePreparedHeaderInput(headerInput);
     var lookup = buildTransactionToCcnMap(normalizedHeader);
 
     rewriteMetadataRows(rows, options && options.metadata);
