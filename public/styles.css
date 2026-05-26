@@ -463,6 +463,38 @@ input[type="checkbox"]:checked {
     color: #fff;
   }
 
+  .dt-header-metadata-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+    width: 100%;
+    margin: 8px 0 14px;
+  }
+
+  .dt-header-metadata-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+    font-size: 12px;
+    color: #d1d5db;
+  }
+
+  .dt-header-metadata-field input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #4b5563;
+    border-radius: 8px;
+    background: #111827;
+    color: #fff;
+    box-sizing: border-box;
+  }
+
+  .dt-header-metadata-field input:focus {
+    outline: 1px solid #ff581f;
+    border-color: #ff581f;
+  }
+
   .candata-client-options {
     width: 100%;
     display: flex;
