@@ -10,6 +10,10 @@ function readFirstSheetRows(filePath) {
   return { rows: XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: "" }), sheetName };
 }
 
+function cloneRows(rows) {
+  return (rows || []).map((row) => (Array.isArray(row) ? row.slice() : row));
+}
+
 function parseNumberFromCell(value) {
   if (value === undefined || value === null) return null;
   let s = String(value).trim();
@@ -397,6 +401,156 @@ function compareObjects(actual, expected) {
   return issues;
 }
 
+function runDtHeaderWorkflowRegression(rootDir) {
+  const issues = [];
+  let workflowModule;
+
+  try {
+    workflowModule = require("../public/dt-header-workflow.js");
+  } catch (err) {
+    return {
+      issues: [`Unable to import ../public/dt-header-workflow.js: ${err.message}`]
+    };
+  }
+
+  const {
+    detectHeaderRowIndex,
+    runDtHeaderWorkflow
+  } = workflowModule || {};
+
+  if (typeof detectHeaderRowIndex !== "function") {
+    issues.push("Missing export: detectHeaderRowIndex");
+  }
+  if (typeof runDtHeaderWorkflow !== "function") {
+    issues.push("Missing export: runDtHeaderWorkflow");
+  }
+  if (issues.length) return { issues };
+
+  const row4HeaderPath = path.join(rootDir, "112-05240631", "CLVS_Report_Header_10133_017927245_260526112458466.xlsx");
+  const row4ItemPath = path.join(rootDir, "112-05240631", "CLVS_Report_Detail_10133_017927245_260526112458608.xlsx");
+  const row5HeaderPath = path.join(rootDir, "83082142460", "RLBE_161_8308214246_EWR_DutiesHeader.xlsx");
+  const row5ItemPath = path.join(rootDir, "83082142460", "RLBE_161_8308214246_EWR_DutiesItem.xlsx");
+
+  const { rows: row4HeaderRows } = readFirstSheetRows(row4HeaderPath);
+  const { rows: row4ItemRows } = readFirstSheetRows(row4ItemPath);
+  const { rows: row5HeaderRows } = readFirstSheetRows(row5HeaderPath);
+  const { rows: row5ItemRows } = readFirstSheetRows(row5ItemPath);
+
+  const row4HeaderIndex = detectHeaderRowIndex(row4HeaderRows);
+  const row4ItemIndex = detectHeaderRowIndex(row4ItemRows);
+  const row5HeaderIndex = detectHeaderRowIndex(row5HeaderRows);
+  const row5ItemIndex = detectHeaderRowIndex(row5ItemRows);
+
+  if (row4HeaderIndex !== 3) issues.push(`Row-4 header detection failed for CLVS header: got ${row4HeaderIndex}, expected 3`);
+  if (row4ItemIndex !== 3) issues.push(`Row-4 header detection failed for CLVS item: got ${row4ItemIndex}, expected 3`);
+  if (row5HeaderIndex !== 4) issues.push(`Row-5 header detection failed for RLBE header: got ${row5HeaderIndex}, expected 4`);
+  if (row5ItemIndex !== 4) issues.push(`Row-5 header detection failed for RLBE item: got ${row5ItemIndex}, expected 4`);
+  if (issues.length) return { issues };
+
+  const metadata = {
+    client: "RELIABLE LOGISTICS",
+    reportName: "WEEKLY DETAIL REPORT",
+    reportDate: "05/27/2026"
+  };
+
+  let workflowResult;
+  try {
+    workflowResult = runDtHeaderWorkflow({
+      headerRows: cloneRows(row4HeaderRows),
+      itemRows: cloneRows(row4ItemRows),
+      metadata
+    });
+  } catch (err) {
+    return {
+      issues: [`runDtHeaderWorkflow threw: ${err.message}`]
+    };
+  }
+
+  const actualHeaderRows = workflowResult && workflowResult.headerRows;
+  const actualItemRows = workflowResult && workflowResult.itemRows;
+  if (!Array.isArray(actualHeaderRows)) {
+    issues.push("runDtHeaderWorkflow should return headerRows.");
+  }
+  if (!Array.isArray(actualItemRows)) {
+    issues.push("runDtHeaderWorkflow should return itemRows.");
+  }
+  if (issues.length) return { issues };
+
+  if (String((actualHeaderRows[0] || [])[1] || "").trim() !== metadata.client) {
+    issues.push(`Header metadata client mismatch: got ${JSON.stringify((actualHeaderRows[0] || [])[1] || "")}`);
+  }
+  if (String((actualHeaderRows[1] || [])[1] || "").trim() !== metadata.reportName) {
+    issues.push(`Header metadata report name mismatch: got ${JSON.stringify((actualHeaderRows[1] || [])[1] || "")}`);
+  }
+  if ((actualHeaderRows[2] || [])[1] !== metadata.reportDate) {
+    issues.push(`Header metadata report date mismatch: got ${JSON.stringify((actualHeaderRows[2] || [])[1] || "")}`);
+  }
+  if (typeof ((actualHeaderRows[2] || [])[1]) !== "string") {
+    issues.push(`Header report date should remain text, got type ${typeof ((actualHeaderRows[2] || [])[1])}`);
+  }
+
+  if (String((actualItemRows[0] || [])[1] || "").trim() !== metadata.client) {
+    issues.push(`Item metadata client mismatch: got ${JSON.stringify((actualItemRows[0] || [])[1] || "")}`);
+  }
+  if (String((actualItemRows[1] || [])[1] || "").trim() !== metadata.reportName) {
+    issues.push(`Item metadata report name mismatch: got ${JSON.stringify((actualItemRows[1] || [])[1] || "")}`);
+  }
+  if ((actualItemRows[2] || [])[1] !== metadata.reportDate) {
+    issues.push(`Item metadata report date mismatch: got ${JSON.stringify((actualItemRows[2] || [])[1] || "")}`);
+  }
+  if (typeof ((actualItemRows[2] || [])[1]) !== "string") {
+    issues.push(`Item report date should remain text, got type ${typeof ((actualItemRows[2] || [])[1])}`);
+  }
+
+  const normalizedHeaderRow = actualHeaderRows[4] || [];
+  const normalizedItemRow = actualItemRows[4] || [];
+  if (normalizeHeaderCell(normalizedHeaderRow[0]) !== "transaction number") {
+    issues.push(`Header row normalization failed: row 5 starts with ${JSON.stringify(normalizedHeaderRow[0] || "")}`);
+  }
+  if (!isEmptyRow(actualHeaderRows[3] || [])) {
+    issues.push("Header row normalization failed: row 4 should be blank after normalization.");
+  }
+  if (normalizeHeaderCell(normalizedItemRow[0]) !== "transaction number") {
+    issues.push(`Item row normalization failed: row 5 starts with ${JSON.stringify(normalizedItemRow[0] || "")}`);
+  }
+  if (!isEmptyRow(actualItemRows[3] || [])) {
+    issues.push("Item row normalization failed: row 4 should be blank after normalization.");
+  }
+
+  const itemHeaderRow = actualItemRows[4] || [];
+  const transactionIdx = itemHeaderRow.findIndex((cell) => normalizeHeaderCell(cell) === "transaction number");
+  const ccnIdx = itemHeaderRow.findIndex((cell) => normalizeHeaderCell(cell) === "ccn");
+  if (transactionIdx === -1) issues.push("Item workflow output is missing Transaction Number.");
+  if (ccnIdx === -1) issues.push("Item workflow output is missing CCN.");
+
+  if (transactionIdx !== -1 && ccnIdx !== -1) {
+    const expectedCcnByTransaction = new Map();
+    for (let r = row4HeaderIndex + 1; r < row4HeaderRows.length; r++) {
+      const row = row4HeaderRows[r] || [];
+      const transaction = String(row[0] || "").trim();
+      const ccn = String(row[1] || "").trim();
+      if (transaction && ccn) expectedCcnByTransaction.set(transaction, ccn);
+    }
+
+    for (let r = 5; r < actualItemRows.length; r++) {
+      const row = actualItemRows[r] || [];
+      if (isEmptyRow(row)) continue;
+      const transaction = String(row[transactionIdx] || "").trim();
+      if (!transaction) continue;
+      const expectedCcn = expectedCcnByTransaction.get(transaction);
+      if (!expectedCcn) continue;
+
+      const actualCcn = String(row[ccnIdx] || "").trim();
+      if (actualCcn !== expectedCcn) {
+        issues.push(`Item CCN fill mismatch for transaction ${transaction}: got ${JSON.stringify(actualCcn)} expected ${JSON.stringify(expectedCcn)}`);
+        break;
+      }
+    }
+  }
+
+  return { issues };
+}
+
 function runCandataRegression(rootDir) {
   const dir = path.join(rootDir, "CandataToGetsFormat");
   const headerIn = path.join(dir, "17WS114V6GF79_DutiesHeader_INPUT.xlsx");
@@ -622,6 +776,7 @@ function main() {
   const rootDir = path.join(process.cwd(), "Test files");
   const candata = runCandataRegression(rootDir);
   const getsHeaderCarryover = runGetsHeaderCarryoverRegression(rootDir);
+  const dtHeaderWorkflow = runDtHeaderWorkflowRegression(rootDir);
   const merge = runMergeRegression(rootDir);
 
   let failed = false;
@@ -652,6 +807,14 @@ function main() {
     failed = true;
     console.log("GETS Header Carryover: FAIL");
     getsHeaderCarryover.issues.forEach((issue) => console.log(`  - ${issue}`));
+  }
+
+  if (dtHeaderWorkflow.issues.length === 0) {
+    console.log("D/T Header Workflow: PASS");
+  } else {
+    failed = true;
+    console.log("D/T Header Workflow: FAIL");
+    dtHeaderWorkflow.issues.forEach((issue) => console.log(`  - ${issue}`));
   }
 
   if (merge.mode === "smoke-only") {
