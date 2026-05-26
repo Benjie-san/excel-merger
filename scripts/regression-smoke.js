@@ -10,6 +10,10 @@ function readFirstSheetRows(filePath) {
   return { rows: XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: "" }), sheetName };
 }
 
+function readJson(filePath) {
+  return JSON.parse(fs.readFileSync(filePath, "utf8"));
+}
+
 function cloneRows(rows) {
   return (rows || []).map((row) => (Array.isArray(row) ? row.slice() : row));
 }
@@ -61,6 +65,10 @@ function isEmptyRow(row) {
 
 function normalizeHeaderCell(v) {
   return String(v || "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function normalizeClientName(value) {
+  return String(value || "").replace(/\s+/g, " ").trim().toLowerCase();
 }
 
 function findHeaderRowAndColumns(rows, specs, maxScan = 25) {
@@ -420,7 +428,9 @@ function runDtHeaderWorkflowRegression(rootDir) {
   const {
     detectHeaderRowIndex,
     prepareHeaderRowsForModify,
-    prepareItemRowsWithCcn
+    prepareItemRowsWithCcn,
+    applyBrokerageAutomation,
+    summarizeDtOutputs
   } = workflowModule || {};
 
   if (typeof detectHeaderRowIndex !== "function") {
@@ -432,17 +442,29 @@ function runDtHeaderWorkflowRegression(rootDir) {
   if (typeof prepareItemRowsWithCcn !== "function") {
     issues.push("Missing export: prepareItemRowsWithCcn");
   }
+  if (typeof applyBrokerageAutomation !== "function") {
+    issues.push("Missing export: applyBrokerageAutomation");
+  }
+  if (typeof summarizeDtOutputs !== "function") {
+    issues.push("Missing export: summarizeDtOutputs");
+  }
   if (issues.length) return { issues };
 
   const row4HeaderPath = path.join(rootDir, "112-05240631", "CLVS_Report_Header_10133_017927245_260526112458466.xlsx");
   const row4ItemPath = path.join(rootDir, "112-05240631", "CLVS_Report_Detail_10133_017927245_260526112458608.xlsx");
+  const row4SourcePath = path.join(rootDir, "112-05240631", "RLBE_50_11205240631_PVG_YYZ_260427045723.xlsx");
+  const finalHeaderObservedPath = path.join(rootDir, "112-05240631", "final output", "RLBE_50_11205240631_PVG_YYZ_260427045723_DutiesHeader.xlsx");
   const row5HeaderPath = path.join(rootDir, "83082142460", "RLBE_161_8308214246_EWR_DutiesHeader.xlsx");
   const row5ItemPath = path.join(rootDir, "83082142460", "RLBE_161_8308214246_EWR_DutiesItem.xlsx");
+  const brokerageRatesPath = path.join(process.cwd(), "public", "brokerage-rates.json");
 
   const { rows: row4HeaderRows } = readFirstSheetRows(row4HeaderPath);
   const { rows: row4ItemRows } = readFirstSheetRows(row4ItemPath);
+  const { rows: row4SourceRows } = readFirstSheetRows(row4SourcePath);
+  const { rows: finalHeaderObservedRows } = readFirstSheetRows(finalHeaderObservedPath);
   const { rows: row5HeaderRows } = readFirstSheetRows(row5HeaderPath);
   const { rows: row5ItemRows } = readFirstSheetRows(row5ItemPath);
+  const brokerageRates = readJson(brokerageRatesPath);
 
   const row4HeaderIndex = detectHeaderRowIndex(row4HeaderRows, "header");
   const row4ItemIndex = detectHeaderRowIndex(row4ItemRows, "item");
@@ -589,6 +611,181 @@ function runDtHeaderWorkflowRegression(rootDir) {
         }
       }
     }
+  }
+
+  let automatedHeaderResult;
+  try {
+    automatedHeaderResult = applyBrokerageAutomation({
+      sourceRows: cloneRows(row4SourceRows),
+      preparedHeader: actualHeaderResult,
+      metadata: {
+        client: "SF EXPRESS",
+        reportName: "AWB# 112-05240631",
+        reportDate: "4/28/2026"
+      },
+      brokerageRates
+    });
+  } catch (err) {
+    return {
+      issues: [`applyBrokerageAutomation threw: ${err.message}`]
+    };
+  }
+
+  if (!automatedHeaderResult || typeof automatedHeaderResult !== "object" || !Array.isArray(automatedHeaderResult.rows)) {
+    issues.push("applyBrokerageAutomation should return an object with rows.");
+  }
+  if (!automatedHeaderResult || !automatedHeaderResult.summary || typeof automatedHeaderResult.summary !== "object") {
+    issues.push("applyBrokerageAutomation should return a summary object.");
+  }
+  if (issues.length) return { issues };
+
+  const automatedHeaderRows = automatedHeaderResult.rows;
+  const automatedHeaderRow = automatedHeaderRows[automatedHeaderResult.headerRowIndex] || [];
+  const automatedTxnIdx = findHeaderColumnIndex(automatedHeaderRow, "Transaction Number");
+  const automatedCcnIdx = findHeaderColumnIndex(automatedHeaderRow, "CCN");
+  const automatedShipmentIdx = findHeaderColumnIndex(automatedHeaderRow, "Shipment Date");
+  const automatedArrivalIdx = findHeaderColumnIndex(automatedHeaderRow, "Arrival Date");
+  const automatedReleaseIdx = findHeaderColumnIndex(automatedHeaderRow, "Release Date");
+  const automatedBrokerageIdx = findHeaderColumnIndex(automatedHeaderRow, "Brokerage Total");
+  const automatedExchangeIdx = findHeaderColumnIndex(automatedHeaderRow, "Exchange Rate");
+
+  if (automatedHeaderResult.summary.clientMatched !== true) {
+    issues.push(`Expected known client match for SF EXPRESS, got ${JSON.stringify(automatedHeaderResult.summary.clientMatched)}`);
+  }
+  if (normalizeClientName(automatedHeaderResult.summary.clientKey) !== normalizeClientName("SF EXPRESS")) {
+    issues.push(`Expected matched client key SF EXPRESS, got ${JSON.stringify(automatedHeaderResult.summary.clientKey)}`);
+  }
+  if (!automatedHeaderResult.summary.counts || automatedHeaderResult.summary.counts.pga !== 2) {
+    issues.push(`Expected PGA count 2, got ${JSON.stringify(automatedHeaderResult.summary && automatedHeaderResult.summary.counts && automatedHeaderResult.summary.counts.pga)}`);
+  }
+  if (!automatedHeaderResult.summary.counts || automatedHeaderResult.summary.counts.lvs !== 72) {
+    issues.push(`Expected LVS count 72, got ${JSON.stringify(automatedHeaderResult.summary && automatedHeaderResult.summary.counts && automatedHeaderResult.summary.counts.lvs)}`);
+  }
+  if (!automatedHeaderResult.summary.counts || automatedHeaderResult.summary.counts.clvs <= 0) {
+    issues.push(`Expected positive CLVS count, got ${JSON.stringify(automatedHeaderResult.summary && automatedHeaderResult.summary.counts && automatedHeaderResult.summary.counts.clvs)}`);
+  }
+  if (automatedHeaderResult.summary.blankBrokerageCount !== 0) {
+    issues.push(`Expected no blank brokerage rows for SF EXPRESS, got ${JSON.stringify(automatedHeaderResult.summary.blankBrokerageCount)}`);
+  }
+
+  const firstAutomatedDataRows = automatedHeaderRows.slice(automatedHeaderResult.headerRowIndex + 1, automatedHeaderResult.headerRowIndex + 6);
+  if (!String((firstAutomatedDataRows[0] || [])[automatedCcnIdx] || "").trim().startsWith("8308")) {
+    issues.push("Expected first transformed data row to be a PGA 8308 row after brokerage sort.");
+  }
+
+  for (let r = automatedHeaderResult.headerRowIndex + 1; r < Math.min(automatedHeaderRows.length, automatedHeaderResult.headerRowIndex + 15); r++) {
+    const row = automatedHeaderRows[r] || [];
+    if (isEmptyRow(row)) continue;
+    if (String(row[automatedShipmentIdx] || "").trim() !== "4/28/2026") {
+      issues.push(`Shipment date mismatch at row ${r + 1}: got ${JSON.stringify(row[automatedShipmentIdx] || "")}`);
+      break;
+    }
+    if (String(row[automatedArrivalIdx] || "").trim() !== "4/28/2026") {
+      issues.push(`Arrival date mismatch at row ${r + 1}: got ${JSON.stringify(row[automatedArrivalIdx] || "")}`);
+      break;
+    }
+    if (String(row[automatedReleaseIdx] || "").trim() !== "4/28/2026") {
+      issues.push(`Release date mismatch at row ${r + 1}: got ${JSON.stringify(row[automatedReleaseIdx] || "")}`);
+      break;
+    }
+    if (parseNumberZero(row[automatedExchangeIdx]) !== 0) {
+      issues.push(`Exchange rate should be zero at row ${r + 1}, got ${JSON.stringify(row[automatedExchangeIdx] || "")}`);
+      break;
+    }
+  }
+
+  const observedHeaderFound = detectHeaderRowIndex(finalHeaderObservedRows, "header");
+  if (observedHeaderFound !== 4) {
+    issues.push(`Corrected final header should keep header row 5, got ${observedHeaderFound}`);
+  }
+  const observedHeaderRow = finalHeaderObservedRows[observedHeaderFound] || [];
+  const observedBrokerageIdx = findHeaderColumnIndex(observedHeaderRow, "Brokerage Total");
+  const observedDataRows = finalHeaderObservedRows.slice(observedHeaderFound + 1).filter((row) => !isEmptyRow(row));
+  const observedDistinctBrokerage = [];
+  for (const row of observedDataRows) {
+    const brokerageRaw = String((row[observedBrokerageIdx] || "")).trim();
+    if (brokerageRaw && !observedDistinctBrokerage.includes(brokerageRaw)) {
+      observedDistinctBrokerage.push(brokerageRaw);
+    }
+  }
+  const actualDistinctBrokerage = [];
+  for (const row of automatedHeaderRows.slice(automatedHeaderResult.headerRowIndex + 1)) {
+    if (isEmptyRow(row)) continue;
+    const brokerageRaw = String((row[automatedBrokerageIdx] || "")).trim();
+    if (brokerageRaw && !actualDistinctBrokerage.includes(brokerageRaw)) {
+      actualDistinctBrokerage.push(brokerageRaw);
+    }
+  }
+  if (JSON.stringify(actualDistinctBrokerage.slice(0, 3)) !== JSON.stringify(observedDistinctBrokerage.slice(0, 3))) {
+    issues.push(`Brokerage sort/order mismatch: actual=${JSON.stringify(actualDistinctBrokerage.slice(0, 3))} expected=${JSON.stringify(observedDistinctBrokerage.slice(0, 3))}`);
+  }
+
+  let automatedItemResult;
+  try {
+    automatedItemResult = prepareItemRowsWithCcn({
+      itemRows: cloneRows(row4ItemRows),
+      preparedHeader: {
+        rows: automatedHeaderRows,
+        headerRowIndex: automatedHeaderResult.headerRowIndex
+      },
+      metadata: {
+        client: "SF EXPRESS",
+        reportName: "AWB# 112-05240631",
+        reportDate: "4/28/2026"
+      }
+    });
+  } catch (err) {
+    return {
+      issues: [`prepareItemRowsWithCcn with automated header threw: ${err.message}`]
+    };
+  }
+
+  let combinedSummary;
+  try {
+    combinedSummary = summarizeDtOutputs({
+      headerRows: automatedHeaderRows,
+      itemRows: automatedItemResult.rows
+    });
+  } catch (err) {
+    return {
+      issues: [`summarizeDtOutputs threw: ${err.message}`]
+    };
+  }
+
+  if (!combinedSummary || !combinedSummary.header || !combinedSummary.compare) {
+    issues.push("summarizeDtOutputs should return header/item/compare sections.");
+  } else {
+    if (typeof combinedSummary.compare.dutyMatch !== "boolean") {
+      issues.push(`Expected boolean dutyMatch, got ${typeof combinedSummary.compare.dutyMatch}`);
+    }
+    if (typeof combinedSummary.compare.gstMatch !== "boolean") {
+      issues.push(`Expected boolean gstMatch, got ${typeof combinedSummary.compare.gstMatch}`);
+    }
+  }
+
+  let unknownClientResult;
+  try {
+    unknownClientResult = applyBrokerageAutomation({
+      sourceRows: cloneRows(row4SourceRows),
+      preparedHeader: actualHeaderResult,
+      metadata: {
+        client: "UNKNOWN CLIENT",
+        reportName: "AWB# 112-05240631",
+        reportDate: "4/28/2026"
+      },
+      brokerageRates
+    });
+  } catch (err) {
+    return {
+      issues: [`applyBrokerageAutomation unknown-client run threw: ${err.message}`]
+    };
+  }
+
+  if (unknownClientResult.summary.clientMatched !== false) {
+    issues.push("Unknown client should report clientMatched=false.");
+  }
+  if (unknownClientResult.summary.blankBrokerageCount <= 0) {
+    issues.push("Unknown client should leave brokerage blank for at least one row.");
   }
 
   try {
