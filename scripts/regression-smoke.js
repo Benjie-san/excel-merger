@@ -461,9 +461,9 @@ function runDtHeaderWorkflowRegression(rootDir) {
     reportDate: "05/27/2026"
   };
 
-  let actualHeaderRows;
+  let actualHeaderResult;
   try {
-    actualHeaderRows = prepareHeaderRowsForModify({
+    actualHeaderResult = prepareHeaderRowsForModify({
       targetRows: cloneRows(row4HeaderRows),
       metadata
     });
@@ -473,10 +473,16 @@ function runDtHeaderWorkflowRegression(rootDir) {
     };
   }
 
-  if (!Array.isArray(actualHeaderRows)) {
-    issues.push("prepareHeaderRowsForModify should return header rows.");
+  if (!actualHeaderResult || typeof actualHeaderResult !== "object" || !Array.isArray(actualHeaderResult.rows)) {
+    issues.push("prepareHeaderRowsForModify should return an object with rows.");
   }
   if (issues.length) return { issues };
+
+  if (actualHeaderResult.headerRowIndex !== 4) {
+    issues.push(`prepareHeaderRowsForModify should expose normalized headerRowIndex=4, got ${JSON.stringify(actualHeaderResult.headerRowIndex)}`);
+  }
+
+  const actualHeaderRows = actualHeaderResult.rows;
 
   if (String((actualHeaderRows[0] || [])[1] || "").trim() !== metadata.client) {
     issues.push(`Header metadata client mismatch: got ${JSON.stringify((actualHeaderRows[0] || [])[1] || "")}`);
@@ -495,7 +501,7 @@ function runDtHeaderWorkflowRegression(rootDir) {
   try {
     actualItemRows = prepareItemRowsWithCcn({
       itemRows: cloneRows(row4ItemRows),
-      headerRows: cloneRows(row4HeaderRows),
+      headerRows: actualHeaderResult,
       metadata
     });
   } catch (err) {
@@ -504,10 +510,19 @@ function runDtHeaderWorkflowRegression(rootDir) {
     };
   }
 
-  if (!Array.isArray(actualItemRows)) {
-    issues.push("prepareItemRowsWithCcn should return item rows.");
+  if (!actualItemRows || typeof actualItemRows !== "object" || !Array.isArray(actualItemRows.rows)) {
+    issues.push("prepareItemRowsWithCcn should return an object with rows.");
   }
   if (issues.length) return { issues };
+
+  if (actualItemRows.headerRowIndex !== 4) {
+    issues.push(`prepareItemRowsWithCcn should expose normalized headerRowIndex=4, got ${JSON.stringify(actualItemRows.headerRowIndex)}`);
+  }
+  if (typeof actualItemRows.unmatchedCount !== "number") {
+    issues.push(`prepareItemRowsWithCcn should expose numeric unmatchedCount, got ${typeof actualItemRows.unmatchedCount}`);
+  }
+
+  actualItemRows = actualItemRows.rows;
 
   if (String((actualItemRows[0] || [])[1] || "").trim() !== metadata.client) {
     issues.push(`Item metadata client mismatch: got ${JSON.stringify((actualItemRows[0] || [])[1] || "")}`);
@@ -573,6 +588,15 @@ function runDtHeaderWorkflowRegression(rootDir) {
           break;
         }
       }
+    }
+  }
+
+  try {
+    detectHeaderRowIndex(row4HeaderRows, "invalid");
+    issues.push("detectHeaderRowIndex should throw on invalid mode.");
+  } catch (err) {
+    if (!/mode/i.test(String(err && err.message))) {
+      issues.push(`detectHeaderRowIndex invalid-mode error should mention mode, got ${JSON.stringify(err.message)}`);
     }
   }
 

@@ -63,10 +63,18 @@
     });
   }
 
+  function getExpectedLabelsForMode(mode) {
+    if (mode === "header") {
+      return ["transaction number", "ccn"];
+    }
+    if (mode === "item") {
+      return ["transaction number", "goods description"];
+    }
+    throw new Error('Invalid mode "' + mode + '". Expected "header" or "item".');
+  }
+
   function detectHeaderRowIndex(rows, mode) {
-    var expectedLabels = mode === "header"
-      ? ["transaction number", "ccn"]
-      : ["transaction number", "goods description"];
+    var expectedLabels = getExpectedLabelsForMode(mode);
     var scanLimit = Math.min((rows || []).length, 10);
 
     for (var i = 0; i < scanLimit; i++) {
@@ -78,7 +86,7 @@
     return -1;
   }
 
-  function normalizeHeaderRowToRowFive(rows, mode) {
+  function normalizeHeaderRows(rows, mode) {
     var headerRowIndex = detectHeaderRowIndex(rows, mode);
     if (headerRowIndex === -1) {
       throw new Error("Could not locate the " + (mode === "header" ? "DutiesHeader" : "DutiesItem") + " header row.");
@@ -89,7 +97,10 @@
       headerRowIndex = 4;
     }
 
-    return headerRowIndex;
+    return {
+      rows: rows,
+      headerRowIndex: headerRowIndex
+    };
   }
 
   function findColumnIndex(headerRow, expectedLabel) {
@@ -102,10 +113,22 @@
     return -1;
   }
 
-  function buildTransactionToCcnMap(headerRows) {
-    var clonedRows = cloneRows(headerRows);
-    var headerRowIndex = normalizeHeaderRowToRowFive(clonedRows, "header");
-    var headerRow = clonedRows[headerRowIndex] || [];
+  function normalizePreparedHeaderInput(headerInput) {
+    if (headerInput && Array.isArray(headerInput.rows)) {
+      return {
+        rows: cloneRows(headerInput.rows),
+        headerRowIndex: typeof headerInput.headerRowIndex === "number" ? headerInput.headerRowIndex : detectHeaderRowIndex(headerInput.rows, "header")
+      };
+    }
+
+    var clonedRows = cloneRows(headerInput);
+    return normalizeHeaderRows(clonedRows, "header");
+  }
+
+  function buildTransactionToCcnMap(headerInput) {
+    var normalizedHeader = normalizePreparedHeaderInput(headerInput);
+    var headerRowIndex = normalizedHeader.headerRowIndex;
+    var headerRow = normalizedHeader.rows[headerRowIndex] || [];
     var transactionIndex = findColumnIndex(headerRow, "Transaction Number");
     var ccnIndex = findColumnIndex(headerRow, "CCN");
 
@@ -114,8 +137,8 @@
     }
 
     var lookup = new Map();
-    for (var r = headerRowIndex + 1; r < clonedRows.length; r++) {
-      var row = clonedRows[r] || [];
+    for (var r = headerRowIndex + 1; r < normalizedHeader.rows.length; r++) {
+      var row = normalizedHeader.rows[r] || [];
       var transaction = normalizeCell(row[transactionIndex]);
       var ccn = normalizeCell(row[ccnIndex]);
       if (!transaction || !ccn) {
@@ -150,31 +173,41 @@
   function prepareHeaderRowsForModify(options) {
     var rows = cloneRows(options && options.targetRows);
     rewriteMetadataRows(rows, options && options.metadata);
-    normalizeHeaderRowToRowFive(rows, "header");
-    return rows;
+    return normalizeHeaderRows(rows, "header");
   }
 
   function prepareItemRowsWithCcn(options) {
     var rows = cloneRows(options && options.itemRows);
-    var lookup = buildTransactionToCcnMap(options && options.headerRows);
+    var normalizedHeader = normalizePreparedHeaderInput(options && options.headerRows);
+    var lookup = buildTransactionToCcnMap(normalizedHeader);
 
     rewriteMetadataRows(rows, options && options.metadata);
-    var headerRowIndex = normalizeHeaderRowToRowFive(rows, "item");
-    var headerRow = rows[headerRowIndex] || [];
+    var normalizedRows = normalizeHeaderRows(rows, "item");
+    var headerRowIndex = normalizedRows.headerRowIndex;
+    var headerRow = normalizedRows.rows[headerRowIndex] || [];
     var transactionIndex = findColumnIndex(headerRow, "Transaction Number");
     if (transactionIndex === -1) {
       throw new Error("Item workbook is missing Transaction Number.");
     }
 
-    var ccnIndex = ensureItemCcnColumn(rows, headerRowIndex);
+    var ccnIndex = ensureItemCcnColumn(normalizedRows.rows, headerRowIndex);
+    var unmatchedCount = 0;
 
-    for (var r = headerRowIndex + 1; r < rows.length; r++) {
-      var row = ensureRow(rows, r);
+    for (var r = headerRowIndex + 1; r < normalizedRows.rows.length; r++) {
+      var row = ensureRow(normalizedRows.rows, r);
       var transaction = normalizeCell(row[transactionIndex]);
-      row[ccnIndex] = transaction ? (lookup.get(transaction) || "") : "";
+      var ccn = transaction ? (lookup.get(transaction) || "") : "";
+      if (transaction && !ccn) {
+        unmatchedCount++;
+      }
+      row[ccnIndex] = ccn;
     }
 
-    return rows;
+    return {
+      rows: normalizedRows.rows,
+      headerRowIndex: headerRowIndex,
+      unmatchedCount: unmatchedCount
+    };
   }
 
   return {
