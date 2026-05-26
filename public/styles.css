@@ -439,6 +439,25 @@ input[type="checkbox"]:checked {
     align-items: center;
     width: 100%;
   }
+
+  .dt-header-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+    gap: 24px;
+    width: 100%;
+    align-items: start;
+  }
+
+  .dt-header-main,
+  .dt-header-report-panel {
+    width: 100%;
+  }
+
+  .dt-header-report-panel {
+    position: sticky;
+    top: 24px;
+    min-height: 100%;
+  }
   
   .drop-area {
     border: 2px dashed #888;
@@ -465,7 +484,7 @@ input[type="checkbox"]:checked {
 
   .dt-header-metadata-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 12px;
     width: 100%;
     margin: 8px 0 14px;
@@ -493,6 +512,32 @@ input[type="checkbox"]:checked {
   .dt-header-metadata-field input:focus {
     outline: 1px solid #ff581f;
     border-color: #ff581f;
+  }
+
+  .dt-header-action-row {
+    display: flex;
+    gap: 12px;
+    width: 100%;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  #modifyReport {
+    min-height: 120px;
+  }
+
+  #modifyReport:empty::before {
+    content: "Report will appear here after analysis or modify.";
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    margin-top: 15px;
+    padding: 18px 15px;
+    background: #111827;
+    border-left: 4px solid #374151;
+    border-radius: 6px;
+    color: #9ca3af;
+    line-height: 1.5;
   }
 
   .candata-client-options {
@@ -640,6 +685,22 @@ input[type="checkbox"]:checked {
     border-radius: 4px;
     font-family: monospace;
     font-size: 13px;
+  }
+
+  @media (max-width: 1100px) {
+    .dt-header-layout {
+      grid-template-columns: 1fr;
+    }
+
+    .dt-header-report-panel {
+      position: static;
+    }
+  }
+
+  @media (max-width: 760px) {
+    .dt-header-metadata-grid {
+      grid-template-columns: 1fr;
+    }
   }
   
   #modify-result-btn, #analyze-result-btn, #candata-result-btn, #apc-item-result-btn, #analyze-8308-result-btn {

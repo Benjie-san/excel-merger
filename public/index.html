@@ -26,7 +26,7 @@
     <hr>
     <a id="link-merger">Excel Merger</a>
     <hr>
-    <a id="link-modifier">D/T Header file</a>
+    <a id="link-modifier">D/T Header and Item Report</a>
     <hr>
     <a id="link-analyzer">Header/Item Analyzer</a>
     <hr>
@@ -107,67 +107,74 @@
      ======================================================= -->
     <div id="modifyTool" class="tool-section">
       <form id="modifyForm">
-        <h2>D/T Header File</h2>
+        <h2>D/T Header and Item Report</h2>
         <p class="sub"> Drag and Drop SFTP and _DutiesHeader File to process data </p>
 
-        <div class="dt-header-metadata-grid">
-          <label class="dt-header-metadata-field" for="modifyClientInput">
-            <span>CLIENT</span>
-            <input type="text" id="modifyClientInput" name="client" autocomplete="off" />
-          </label>
-          <label class="dt-header-metadata-field" for="modifyReportNameInput">
-            <span>RPT NAME</span>
-            <input type="text" id="modifyReportNameInput" name="reportName" autocomplete="off" />
-          </label>
-          <label class="dt-header-metadata-field" for="modifyReportDateInput">
-            <span>RPT DATE</span>
-            <input type="text" id="modifyReportDateInput" name="reportDate" autocomplete="off" />
-          </label>
-        </div>
-      
-        <!-- DROP ZONE FOR SOURCE FILE -->
-        <div id="sourceDropZone" class="drop-area">
-          <i id="upload-icon" class="bi bi-file-earmark-arrow-up-fill"></i>
-          <p>Drag & Drop SFTP File Here</p>
-          <p>or click to select</p>
-          <input type="file" id="sourceFileInput" accept=".xlsx" hidden />
-        </div>
-        <p id="sourceFileName" class="filename"></p>
-      
-        <!-- DROP ZONE FOR TARGET FILE -->
-        <div id="targetDropZone" class="drop-area">
-          <i id="upload-icon" class="bi bi-file-earmark-arrow-up-fill"></i>
-          <p>Drag & Drop Duties Header Here</p>
-          <p>or click to select</p>
-          <input type="file" id="targetFileInput" accept=".xlsx" hidden />
-        </div>
-        <p id="targetFileName" class="filename"></p>
+        <div class="dt-header-layout">
+          <div class="dt-header-main">
+            <div class="dt-header-metadata-grid">
+              <label class="dt-header-metadata-field" for="modifyClientInput">
+                <span>CLIENT</span>
+                <input type="text" id="modifyClientInput" name="client" autocomplete="off" />
+              </label>
+              <label class="dt-header-metadata-field" for="modifyReportNameInput">
+                <span>RPT NAME</span>
+                <input type="text" id="modifyReportNameInput" name="reportName" autocomplete="off" />
+              </label>
+              <label class="dt-header-metadata-field" for="modifyReportDateInput">
+                <span>RPT DATE</span>
+                <input type="text" id="modifyReportDateInput" name="reportDate" autocomplete="off" />
+              </label>
+            </div>
 
-        <!-- OPTIONAL DROP ZONE FOR DUTIES ITEM FILE -->
-        <div id="modifyItemDropZone" class="drop-area">
-          <i id="upload-icon" class="bi bi-file-earmark-arrow-up-fill"></i>
-          <p>Drag & Drop Duties Item Here (Optional)</p>
-          <p>or click to select</p>
-          <input type="file" id="modifyItemFileInput" accept=".xlsx" hidden />
+            <!-- DROP ZONE FOR SOURCE FILE -->
+            <div id="sourceDropZone" class="drop-area">
+              <i id="upload-icon" class="bi bi-file-earmark-arrow-up-fill"></i>
+              <p>Drag & Drop SFTP File Here</p>
+              <p>or click to select</p>
+              <input type="file" id="sourceFileInput" accept=".xlsx" hidden />
+            </div>
+            <p id="sourceFileName" class="filename"></p>
+
+            <!-- DROP ZONE FOR TARGET FILE -->
+            <div id="targetDropZone" class="drop-area">
+              <i id="upload-icon" class="bi bi-file-earmark-arrow-up-fill"></i>
+              <p>Drag & Drop Duties Header Here</p>
+              <p>or click to select</p>
+              <input type="file" id="targetFileInput" accept=".xlsx" hidden />
+            </div>
+            <p id="targetFileName" class="filename"></p>
+
+            <!-- OPTIONAL DROP ZONE FOR DUTIES ITEM FILE -->
+            <div id="modifyItemDropZone" class="drop-area">
+              <i id="upload-icon" class="bi bi-file-earmark-arrow-up-fill"></i>
+              <p>Drag & Drop Duties Item Here (Optional)</p>
+              <p>or click to select</p>
+              <input type="file" id="modifyItemFileInput" accept=".xlsx" hidden />
+            </div>
+            <p id="modifyItemFileName" class="filename"></p>
+
+            <hr>
+
+            <div class="dt-header-action-row">
+              <button type="button" id="runModify" class="btn-primary">Analyze 8308 Values</button>
+              <button type="button" id="proceedModify" class="btn-primary" style="display:none;">Proceed with Modify</button>
+            </div>
+
+            <div id="modify-result-btn">
+              <button type="button" id="resetModifyBtn" style="display:none;">
+                <span class="material-symbols-outlined">
+                refresh
+                </span>
+                <p>Start Over</p>
+              </button>
+            </div>
+          </div>
+
+          <div class="dt-header-report-panel">
+            <div id="modifyReport"></div>
+          </div>
         </div>
-        <p id="modifyItemFileName" class="filename"></p>
-      
-        <hr>
-      
-        <button type="button" id="runModify" class="btn-primary">Analyze 8308 Values</button>
-
-        <button type="button" id="proceedModify" class="btn-primary" style="display:none;">Proceed with Modify</button>
-
-        <div id="modify-result-btn">
-          <button type="button" id="resetModifyBtn" style="display:none;">
-            <span class="material-symbols-outlined">
-            refresh
-            </span>
-            <p>Start Over</p>
-          </button>
-        </div>
-
-        <div id="modifyReport"></div>
       </form>
     </div>
 
