@@ -523,60 +523,80 @@ function generateTimestamp12() {
 
 
 /**************************************************************
- * Excel Modifier Module (Full) — Exact-match (Option A)
- * - Isolated (IIFE) to avoid colliding with merger code
- * - Exact CCN matching: remove "8308" only if at start of target H
- * - Insert rows from source (AC -> B/H, AS -> J), set A="CLVS"
- * - Copy C-F from last non-empty existing target row
- * - K..Q = 0, R = "DDP"
- * - Convert J->Q (row 6 onward) to true numbers and force General format
- * - Auto-download with updated timestamp in filename (12-digit YYMMDDHHmmSS)
+ * Excel Modifier Module
+ * - Isolated (IIFE) to avoid colliding with other tool logic
+ * - Preserves the existing 8308 analysis gate
+ * - Rewrites metadata rows and normalizes row-4 headers via DtHeaderWorkflow
+ * - Optionally generates a paired DutiesItem workbook with direct CCN fill
  **************************************************************/
 (function ExcelModifyModule() {
-  // DOM bindings (must exist in your HTML)
+  const workflow = window.DtHeaderWorkflow;
   const modifyForm = document.getElementById("modifyForm");
   const sourceDrop = document.getElementById("sourceDropZone");
   const sourceInput = document.getElementById("sourceFileInput");
   const sourceFileName = document.getElementById("sourceFileName");
-
   const targetDrop = document.getElementById("targetDropZone");
   const targetInput = document.getElementById("targetFileInput");
   const targetFileName = document.getElementById("targetFileName");
-
+  const itemDrop = document.getElementById("modifyItemDropZone");
+  const itemInput = document.getElementById("modifyItemFileInput");
+  const itemFileName = document.getElementById("modifyItemFileName");
+  const clientInput = document.getElementById("modifyClientInput");
+  const reportNameInput = document.getElementById("modifyReportNameInput");
+  const reportDateInput = document.getElementById("modifyReportDateInput");
   const runModifyBtn = document.getElementById("runModify");
+  const proceedModifyBtn = document.getElementById("proceedModify");
   const resetModifyBtn = document.getElementById("resetModifyBtn");
+  const reportEl = document.getElementById("modifyReport");
 
-  /* -------------------------
-     Dropzone setup (isolated)
-     ------------------------- */
+  if (!workflow || !modifyForm || !sourceDrop || !targetDrop || !runModifyBtn || !proceedModifyBtn || !resetModifyBtn) {
+    return;
+  }
+
   function setupDropZone_MOD(dropArea, fileInput, fileNameDisplay) {
-    dropArea.addEventListener("dragover", (e) => { e.preventDefault(); dropArea.classList.add("dragover"); });
+    if (!dropArea || !fileInput || !fileNameDisplay) return;
+
+    dropArea.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      dropArea.classList.add("dragover");
+    });
     dropArea.addEventListener("dragleave", () => dropArea.classList.remove("dragover"));
     dropArea.addEventListener("drop", (e) => {
-      e.preventDefault(); dropArea.classList.remove("dragover");
+      e.preventDefault();
+      dropArea.classList.remove("dragover");
       const f = e.dataTransfer.files && e.dataTransfer.files[0];
       if (!f) return;
-      if (!f.name.toLowerCase().endsWith(".xlsx")) { alert("Please drop a .xlsx file"); return; }
-      try { const dt = new DataTransfer(); dt.items.add(f); fileInput.files = dt.files; } catch (err) { /*ignore*/ }
+      if (!f.name.toLowerCase().endsWith(".xlsx")) {
+        alert("Please drop a .xlsx file");
+        return;
+      }
+      try {
+        const dt = new DataTransfer();
+        dt.items.add(f);
+        fileInput.files = dt.files;
+      } catch (err) {
+        /* ignore */
+      }
       fileNameDisplay.textContent = f.name;
-      console.log("Drop set:", f.name);
     });
     dropArea.addEventListener("click", () => fileInput.click());
     fileInput.addEventListener("change", (e) => {
-      const f = e.target.files && e.target.files[0]; if (!f) return;
-      if (!f.name.toLowerCase().endsWith(".xlsx")) { alert("Please select a .xlsx file"); e.target.value = ""; return; }
+      const f = e.target.files && e.target.files[0];
+      if (!f) return;
+      if (!f.name.toLowerCase().endsWith(".xlsx")) {
+        alert("Please select a .xlsx file");
+        e.target.value = "";
+        return;
+      }
       fileNameDisplay.textContent = f.name;
-      console.log("Input set:", f.name);
     });
   }
 
   setupDropZone_MOD(sourceDrop, sourceInput, sourceFileName);
   setupDropZone_MOD(targetDrop, targetInput, targetFileName);
+  setupDropZone_MOD(itemDrop, itemInput, itemFileName);
 
-  /* -------------------------
-     Helpers
-     ------------------------- */
-  function generateTimestamp12() {
+  function generateTimestamp12_MOD() {
     const now = new Date();
     const yy = String(now.getFullYear()).slice(-2);
     const MM = String(now.getMonth() + 1).padStart(2, "0");
@@ -587,7 +607,15 @@ function generateTimestamp12() {
     return yy + MM + dd + HH + mm + ss;
   }
 
-  // read Excel file -> AoA (unique to module)
+  function s2ab_MOD(s) {
+    const buf = new ArrayBuffer(s.length);
+    const view = new Uint8Array(buf);
+    for (let i = 0; i < s.length; i++) {
+      view[i] = s.charCodeAt(i) & 0xff;
+    }
+    return buf;
+  }
+
   async function readExcelFile_MOD(file) {
     return new Promise((resolve, reject) => {
       if (!file) return resolve([]);
@@ -599,14 +627,15 @@ function generateTimestamp12() {
           const ws = wb.Sheets[wb.SheetNames[0]];
           const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false });
           resolve(rows);
-        } catch (err) { reject(err); }
+        } catch (err) {
+          reject(err);
+        }
       };
       reader.onerror = (err) => reject(err);
       reader.readAsBinaryString(file);
     });
   }
 
-  // force a worksheet cell to numeric general
   function setWorksheetNumber(ws, r, c, value) {
     const ref = XLSX.utils.encode_cell({ r, c });
     ws[ref] = { t: "n", v: value, z: "General" };
@@ -637,224 +666,207 @@ function generateTimestamp12() {
     return neg ? -num : num;
   }
 
-  // find last non-empty row in AoA (search from bottom)
   function findLastNonEmptyRow(rows) {
     for (let i = rows.length - 1; i >= 0; i--) {
       const row = rows[i];
       if (!row) continue;
-      if (row.some(cell => cell !== null && cell !== undefined && String(cell).trim() !== "")) return i;
+      if (row.some((cell) => cell !== null && cell !== undefined && String(cell).trim() !== "")) {
+        return i;
+      }
     }
     return -1;
   }
 
-  /* -------------------------
-     Clean target CCN per Option A
-     - remove "8308" only if at start, then keep EXACT rest
-     ------------------------- */
   function cleanTargetCCN(raw) {
     if (raw === undefined || raw === null) return "";
     let s = String(raw).trim();
-    if (s.startsWith("8308")) s = s.substring(4); // remove ONLY prefix
+    if (s.startsWith("8308")) s = s.substring(4);
     return s;
   }
 
-  /* -------------------------
-     Core modify function
-     ------------------------- */
-  async function modifyAndDownloadExactMatch_MOD({
-    sourceFileObj,
-    targetFileObj,
-    ccnColumnIndex = 7,        // H
-    ccnStartRowIndex = 5,      // H6 -> index 5
-    sourceACStartIndex = 2,    // AC3 -> index 2
-    sourceASStartIndex = 2     // AS3 -> index 2
-  } = {}) {
-    try {
-      if (!sourceFileObj || !targetFileObj) { alert("Please provide Source and Target files."); return; }
+  function buildOutputName_MOD(fileName, marker) {
+    const newStamp = generateTimestamp12_MOD();
+    const stampRegex = new RegExp(`(\\d{12})(?=${marker})`, "i");
+    const markerRegex = new RegExp(marker, "i");
 
-      // column constants
-      const COL_AC = 28, COL_AS = 44;
-      const COL_A = 0, COL_B = 1, COL_C = 2, COL_D = 3, COL_E = 4, COL_F = 5, COL_H = 7;
-      const COL_J = 9, COL_K = 10, COL_Q = 16, COL_R = 17;
-
-      // read files
-      console.log("Reading target...");
-      const tgtRows = await readExcelFile_MOD(targetFileObj);
-      console.log("Reading source...");
-      const srcRows = await readExcelFile_MOD(sourceFileObj);
-
-      const targetRows = Array.isArray(tgtRows) ? tgtRows : [];
-      const sourceRows = Array.isArray(srcRows) ? srcRows : [];
-
-      // Find last data row; we'll insert new rows *before* trailing blanks
-      const lastNonEmptyIndex = findLastNonEmptyRow(targetRows);
-      const dataTargetRows = lastNonEmptyIndex >= 0
-        ? targetRows.slice(0, lastNonEmptyIndex + 1)
-        : targetRows;
-      console.log("Target rows (raw):", targetRows.length, "data:", dataTargetRows.length);
-
-      // build refSet from target H (exact cleaned strings)
-      const refSet = new Set();
-      for (let r = ccnStartRowIndex; r < dataTargetRows.length; r++) {
-        const row = dataTargetRows[r] || [];
-        const raw = row[ccnColumnIndex];
-        if (raw === undefined || raw === null) continue;
-        const cleaned = cleanTargetCCN(raw);
-        if (cleaned !== "") refSet.add(cleaned);
+    if (markerRegex.test(fileName)) {
+      if (stampRegex.test(fileName)) {
+        return fileName.replace(stampRegex, newStamp);
       }
-      console.log("refSet size:", refSet.size);
+      return fileName.replace(markerRegex, `${newStamp}${marker}`);
+    }
 
-      // build source items (keep AC as EXACT trimmed string)
-      const sourceItems = [];
-      const sourceSeen = new Set();
-      for (let r = sourceACStartIndex; r < sourceRows.length; r++) {
-        const row = sourceRows[r] || [];
-        const acRaw = (row[COL_AC] === undefined || row[COL_AC] === null) ? "" : String(row[COL_AC]).trim();
-        const asRaw = (row[COL_AS] === undefined || row[COL_AS] === null) ? "" : String(row[COL_AS]).trim();
-        if (acRaw === "" && asRaw === "") continue;
-        if (acRaw !== "") {
-          if (sourceSeen.has(acRaw)) continue;
-          sourceSeen.add(acRaw);
-        }
-        sourceItems.push({ rowIndex: r, acRaw, asRaw });
-      }
-      console.log("sourceItems:", sourceItems.length);
+    const dotIdx = fileName.lastIndexOf(".");
+    const base = dotIdx === -1 ? fileName : fileName.slice(0, dotIdx);
+    const ext = dotIdx === -1 ? ".xlsx" : fileName.slice(dotIdx);
+    return `${base}_${newStamp}${ext}`;
+  }
 
-      // determine copy-from row for C-F: last non-empty row in trimmed target
-      const lastExistingRow = lastNonEmptyIndex >= 0 ? dataTargetRows[lastNonEmptyIndex] : [];
+  function downloadWorkbookFromRows_MOD(rows, fileName, numericConfig) {
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(rows);
 
-      // prepare inserted rows array
-      // targetRowLen: base width derived from header or safe default
-      const headerIndex = 0;
-      const headerRow = dataTargetRows[headerIndex] || [];
-      const targetRowLen = Math.max(headerRow.length, COL_R + 1, COL_Q + 1, COL_J + 1, 25);
-
-      const insertedRows = [];
-      let skippedExact = 0;
-
-      for (const item of sourceItems) {
-        const acTrim = item.acRaw; // exact trimmed string
-
-        // skip if exact match exists in refSet
-        if (acTrim !== "" && refSet.has(acTrim)) {
-          skippedExact++;
-          continue;
-        }
-
-        // build new row
-        const newRow = new Array(targetRowLen).fill("");
-
-        newRow[COL_A] = "CLVS";            // Column A
-        newRow[COL_B] = item.acRaw;        // Column B
-        newRow[COL_H] = item.acRaw;        // Column H (CCN)
-        newRow[COL_J] = item.asRaw;        // Column J
-
-        // copy C-F from lastExistingRow if present
-        newRow[COL_C] = lastExistingRow[COL_C] ?? "";
-        newRow[COL_D] = lastExistingRow[COL_D] ?? "";
-        newRow[COL_E] = lastExistingRow[COL_E] ?? "";
-        newRow[COL_F] = lastExistingRow[COL_F] ?? "";
-
-        // K..Q -> 0
-        for (let c = COL_K; c <= COL_Q; c++) newRow[c] = 0;
-
-        // R -> "DDP"
-        newRow[COL_R] = "DDP";
-
-        insertedRows.push(newRow);
-      }
-
-      console.log("Inserted:", insertedRows.length, "Skipped:", skippedExact);
-
-      // Build final AoA (preserve original target rows, then appended inserted rows)
-      const insertAt = lastNonEmptyIndex >= 0 ? lastNonEmptyIndex + 1 : 0;
-      const finalAoA = targetRows
-        .slice(0, insertAt)
-        .concat(insertedRows, targetRows.slice(insertAt));
-
-      // Create workbook and worksheet from finalAoA
-      const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.aoa_to_sheet(finalAoA);
-
-      // Convert Value for Duty -> Exchange Rate to numbers starting at row index 5 (Excel row 6)
-      const startIndex = 5;
-      const headerRowFinal = finalAoA[0] || [];
-      let colStart = headerRowFinal.indexOf("Value for Duty");
-      let colEnd = headerRowFinal.indexOf("Exchange Rate");
-      if (colStart === -1 || colEnd === -1 || colStart > colEnd) {
-        colStart = 9;
-        colEnd = 16;
-      }
-      for (let r = startIndex; r < finalAoA.length; r++) {
-        const row = finalAoA[r] || [];
-        for (let c = colStart; c <= colEnd; c++) {
-          const rawVal = row[c];
-          const num = parseNumberFromCell_MOD(rawVal);
+    if (numericConfig) {
+      for (let r = numericConfig.startRowIndex; r < rows.length; r++) {
+        const row = rows[r] || [];
+        for (let c = numericConfig.startColIndex; c <= numericConfig.endColIndex; c++) {
+          const num = parseNumberFromCell_MOD(row[c]);
           if (num !== null) {
-            // update worksheet cell as number and force General numeric format
             setWorksheetNumber(ws, r, c, num);
-            // also update AoA to keep consistent (optional)
-            finalAoA[r][c] = num;
           }
         }
       }
-
-      XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
-
-      // Determine output filename from targetFileObj and replace/insert 12-digit timestamp before _DutiesHeader
-      let outName = targetFileObj.name || "updated_target.xlsx";
-      const stampRegex = /(\d{12})(?=_DutiesHeader)/;
-      const newStamp = generateTimestamp12();
-      if (/_DutiesHeader/i.test(outName)) {
-        if (stampRegex.test(outName)) {
-          outName = outName.replace(stampRegex, newStamp);
-        } else {
-          outName = outName.replace(/_DutiesHeader/i, `${newStamp}_DutiesHeader`);
-        }
-      } else {
-        // fallback: append timestamp
-        const dotIdx = outName.lastIndexOf(".");
-        const base = dotIdx === -1 ? outName : outName.slice(0, dotIdx);
-        const ext = dotIdx === -1 ? "" : outName.slice(dotIdx);
-        outName = `${base}_${newStamp}${ext || ".xlsx"}`;
-      }
-
-      // Write and download
-      const wbout = XLSX.write(wb, { bookType: "xlsx", type: "binary", compression: true, bookSST: false });
-      function s2ab(s) { const buf = new ArrayBuffer(s.length); const view = new Uint8Array(buf); for (let i = 0; i < s.length; i++) view[i] = s.charCodeAt(i) & 0xff; return buf; }
-      downloadBlobFile(new Blob([s2ab(wbout)], { type: "application/octet-stream" }), outName);
-
-      // UI report
-      if (resetModifyBtn) {
-        resetModifyBtn.style.display = 'flex';
-      }
-
-      console.log("Modify complete. Downloaded:", outName);
-    } catch (err) {
-      console.error("modify error:", err);
-      alert("Modify error: " + (err && err.message ? err.message : err));
     }
+
+    XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+    const wbout = XLSX.write(wb, { bookType: "xlsx", type: "binary", compression: true, bookSST: false });
+    downloadBlobFile(new Blob([s2ab_MOD(wbout)], { type: "application/octet-stream" }), fileName);
   }
 
-  /* -------------------------
-     8308 Value-for-Duty Analyzer
-     - Extracts all 8308 entries from header file (Column H, J)
-     - Compares with SFTP file (Column AC, AS)
-     - Reports mismatches in Value for Duty
-     - Converts values to numeric for comparison (handles accounting format, decimals)
-     ------------------------- */
+  function readMetadata_MOD() {
+    return {
+      client: String(clientInput?.value || "").trim(),
+      reportName: String(reportNameInput?.value || "").trim(),
+      reportDate: String(reportDateInput?.value || "").trim()
+    };
+  }
+
+  function validateModifyInputs_MOD() {
+    const metadata = readMetadata_MOD();
+    if (!metadata.client || !metadata.reportName || !metadata.reportDate) {
+      throw new Error("Please provide CLIENT, RPT NAME, and RPT DATE.");
+    }
+
+    const sourceFile = sourceInput.files && sourceInput.files[0] ? sourceInput.files[0] : null;
+    const targetFile = targetInput.files && targetInput.files[0] ? targetInput.files[0] : null;
+    const itemFile = itemInput && itemInput.files && itemInput.files[0] ? itemInput.files[0] : null;
+
+    if (!sourceFile || !targetFile) {
+      throw new Error("Please provide both SFTP and DutiesHeader files.");
+    }
+
+    return { metadata, sourceFile, targetFile, itemFile };
+  }
+
+  function getTargetHeaderRowIndex_MOD(rows) {
+    const headerRowIndex = workflow.detectHeaderRowIndex(rows, "header");
+    if (headerRowIndex === -1) {
+      throw new Error("Could not locate the DutiesHeader header row.");
+    }
+    return headerRowIndex;
+  }
+
+  async function buildModifiedHeaderRows_MOD({ sourceRows, preparedHeader }) {
+    const targetRows = Array.isArray(preparedHeader.rows) ? preparedHeader.rows : [];
+    const headerRowIndex = preparedHeader.headerRowIndex;
+    const ccnStartRowIndex = headerRowIndex + 1;
+    const sourceACStartIndex = 2;
+    const sourceASStartIndex = 2;
+
+    const COL_AC = 28;
+    const COL_AS = 44;
+    const COL_A = 0;
+    const COL_B = 1;
+    const COL_C = 2;
+    const COL_D = 3;
+    const COL_E = 4;
+    const COL_F = 5;
+    const COL_H = 7;
+    const COL_J = 9;
+    const COL_K = 10;
+    const COL_Q = 16;
+    const COL_R = 17;
+
+    const lastNonEmptyIndex = findLastNonEmptyRow(targetRows);
+    const dataTargetRows = lastNonEmptyIndex >= 0 ? targetRows.slice(0, lastNonEmptyIndex + 1) : targetRows.slice();
+    const refSet = new Set();
+    for (let r = ccnStartRowIndex; r < dataTargetRows.length; r++) {
+      const row = dataTargetRows[r] || [];
+      const raw = row[COL_H];
+      if (raw === undefined || raw === null) continue;
+      const cleaned = cleanTargetCCN(raw);
+      if (cleaned !== "") refSet.add(cleaned);
+    }
+
+    const sourceItems = [];
+    const sourceSeen = new Set();
+    for (let r = sourceACStartIndex; r < sourceRows.length; r++) {
+      const row = sourceRows[r] || [];
+      const acRaw = row[COL_AC] === undefined || row[COL_AC] === null ? "" : String(row[COL_AC]).trim();
+      const asRaw = row[COL_AS] === undefined || row[COL_AS] === null ? "" : String(row[COL_AS]).trim();
+      if (acRaw === "" && asRaw === "") continue;
+      if (acRaw !== "") {
+        if (sourceSeen.has(acRaw)) continue;
+        sourceSeen.add(acRaw);
+      }
+      sourceItems.push({ acRaw, asRaw });
+    }
+
+    const lastExistingRow = lastNonEmptyIndex >= 0 ? dataTargetRows[lastNonEmptyIndex] || [] : [];
+    const headerRow = dataTargetRows[headerRowIndex] || [];
+    const targetRowLen = Math.max(headerRow.length, COL_R + 1, COL_Q + 1, COL_J + 1, 25);
+    const insertedRows = [];
+
+    for (const item of sourceItems) {
+      if (item.acRaw !== "" && refSet.has(item.acRaw)) {
+        continue;
+      }
+
+      const newRow = new Array(targetRowLen).fill("");
+      newRow[COL_A] = "CLVS";
+      newRow[COL_B] = item.acRaw;
+      newRow[COL_H] = item.acRaw;
+      newRow[COL_J] = item.asRaw;
+      newRow[COL_C] = lastExistingRow[COL_C] ?? "";
+      newRow[COL_D] = lastExistingRow[COL_D] ?? "";
+      newRow[COL_E] = lastExistingRow[COL_E] ?? "";
+      newRow[COL_F] = lastExistingRow[COL_F] ?? "";
+      for (let c = COL_K; c <= COL_Q; c++) {
+        newRow[c] = 0;
+      }
+      newRow[COL_R] = "DDP";
+      insertedRows.push(newRow);
+      if (item.acRaw !== "") {
+        refSet.add(item.acRaw);
+      }
+    }
+
+    const insertAt = lastNonEmptyIndex >= 0 ? lastNonEmptyIndex + 1 : 0;
+    const finalRows = targetRows.slice(0, insertAt).concat(insertedRows, targetRows.slice(insertAt));
+    return {
+      rows: finalRows,
+      headerRowIndex,
+      insertedCount: insertedRows.length
+    };
+  }
+
+  function buildHeaderNumericConfig_MOD(rows, headerRowIndex) {
+    const headerRow = rows[headerRowIndex] || [];
+    let colStart = headerRow.indexOf("Value for Duty");
+    let colEnd = headerRow.indexOf("Exchange Rate");
+    if (colStart === -1 || colEnd === -1 || colStart > colEnd) {
+      colStart = 9;
+      colEnd = 16;
+    }
+    return {
+      startRowIndex: headerRowIndex + 1,
+      startColIndex: colStart,
+      endColIndex: colEnd
+    };
+  }
+
   async function analyze8308ValueForDuty(sourceFileObj, targetFileObj) {
     try {
-      const COL_AC = 28, COL_AS = 44;
-      const COL_H = 7, COL_J = 9;
+      const COL_AC = 28;
+      const COL_AS = 44;
+      const COL_H = 7;
+      const COL_J = 9;
 
-      const tgtRows = await readExcelFile_MOD(targetFileObj);
-      const srcRows = await readExcelFile_MOD(sourceFileObj);
+      const targetRows = await readExcelFile_MOD(targetFileObj);
+      const sourceRows = await readExcelFile_MOD(sourceFileObj);
+      const headerRowIndex = getTargetHeaderRowIndex_MOD(targetRows);
+      const dataStartRowIndex = headerRowIndex + 1;
 
-      const targetRows = Array.isArray(tgtRows) ? tgtRows : [];
-      const sourceRows = Array.isArray(srcRows) ? srcRows : [];
-
-      // Build map of SFTP file: CCN -> Value for Duty (numeric)
       const sftpValueMap = new Map();
       for (let r = 2; r < sourceRows.length; r++) {
         const row = sourceRows[r] || [];
@@ -862,42 +874,37 @@ function generateTimestamp12() {
         const valueRaw = row[COL_AS];
         const ccn = ccnRaw === undefined || ccnRaw === null ? "" : String(ccnRaw).trim();
         if (ccn !== "") {
-          const numValue = parseNumberFromCell_MOD(valueRaw);
-          sftpValueMap.set(ccn, { raw: valueRaw, numeric: numValue });
-        }
-      }
-
-      // Extract 8308 entries from header
-      const eightThreeZeroEightEntries = [];
-      for (let r = 5; r < targetRows.length; r++) {
-        const row = targetRows[r] || [];
-        const ccnRaw = row[COL_H];
-        const valueRaw = row[COL_J];
-        const ccn = ccnRaw === undefined || ccnRaw === null ? "" : String(ccnRaw).trim();
-        
-        if (ccn.startsWith("8308")) {
-          const cleanCCN = ccn.substring(4); // Remove 8308 prefix
-          const numValue = parseNumberFromCell_MOD(valueRaw);
-          eightThreeZeroEightEntries.push({
-            originalCCN: ccn,
-            cleanCCN: cleanCCN,
-            headerRaw: valueRaw,
-            headerNumeric: numValue,
-            rowIndex: r + 1 // Excel row number (1-based)
+          sftpValueMap.set(ccn, {
+            raw: valueRaw,
+            numeric: parseNumberFromCell_MOD(valueRaw)
           });
         }
       }
 
-      // Compare with SFTP values (numeric comparison with tolerance)
+      const eightThreeZeroEightEntries = [];
+      for (let r = dataStartRowIndex; r < targetRows.length; r++) {
+        const row = targetRows[r] || [];
+        const ccnRaw = row[COL_H];
+        const valueRaw = row[COL_J];
+        const ccn = ccnRaw === undefined || ccnRaw === null ? "" : String(ccnRaw).trim();
+        if (!ccn.startsWith("8308")) continue;
+
+        eightThreeZeroEightEntries.push({
+          originalCCN: ccn,
+          cleanCCN: ccn.substring(4),
+          headerRaw: valueRaw,
+          headerNumeric: parseNumberFromCell_MOD(valueRaw),
+          rowIndex: r + 1
+        });
+      }
+
       const mismatches = [];
       let matchCount = 0;
-      const numTolerance = 0.001; // Small tolerance for floating point differences
+      const numTolerance = 0.001;
 
       for (const entry of eightThreeZeroEightEntries) {
         const sftpData = sftpValueMap.get(entry.cleanCCN);
-        
         if (!sftpData) {
-          // No match in SFTP
           mismatches.push({
             ...entry,
             sftpRaw: "-",
@@ -905,36 +912,35 @@ function generateTimestamp12() {
             match: false,
             reason: "CCN not found in SFTP"
           });
+          continue;
+        }
+
+        const headerNum = entry.headerNumeric;
+        const sftpNum = sftpData.numeric;
+        let isMatch = false;
+        if (headerNum !== null && sftpNum !== null) {
+          isMatch = Math.abs(headerNum - sftpNum) <= numTolerance;
+        } else if (headerNum === null && sftpNum === null) {
+          isMatch = true;
+        }
+
+        if (isMatch) {
+          matchCount++;
         } else {
-          // Compare numerically
-          const headerNum = entry.headerNumeric;
-          const sftpNum = sftpData.numeric;
-          
-          let isMatch = false;
-          if (headerNum !== null && sftpNum !== null) {
-            isMatch = Math.abs(headerNum - sftpNum) <= numTolerance;
-          } else if (headerNum === null && sftpNum === null) {
-            isMatch = true; // Both empty/invalid
-          }
-          
-          if (isMatch) {
-            matchCount++;
-          } else {
-            mismatches.push({
-              ...entry,
-              sftpRaw: sftpData.raw,
-              sftpNumeric: sftpData.numeric,
-              match: false,
-              reason: "Value mismatch"
-            });
-          }
+          mismatches.push({
+            ...entry,
+            sftpRaw: sftpData.raw,
+            sftpNumeric: sftpData.numeric,
+            match: false,
+            reason: "Value mismatch"
+          });
         }
       }
 
       return {
         total: eightThreeZeroEightEntries.length,
         matches: matchCount,
-        mismatches: mismatches,
+        mismatches,
         success: true
       };
     } catch (err) {
@@ -946,17 +952,12 @@ function generateTimestamp12() {
     }
   }
 
-  /* -------------------------
-     Render 8308 Analysis Report
-     ------------------------- */
   function renderModifyReport(analysisResult) {
-    const reportEl = document.getElementById("modifyReport");
-    const proceedBtn = document.getElementById("proceedModify");
     if (!reportEl) return;
 
     if (!analysisResult.success) {
       reportEl.innerHTML = `<div class="analyze-report-container"><div class="analyze-8308-report"><h4>Analysis Error</h4><p>${analysisResult.error}</p></div></div>`;
-      if (proceedBtn) proceedBtn.style.display = "none";
+      proceedModifyBtn.style.display = "none";
       return;
     }
 
@@ -965,7 +966,7 @@ function generateTimestamp12() {
     html += `<div class="analyze-8308-summary">`;
     html += `<div class="analyze-8308-stat"><div class="analyze-8308-stat-label">Total 8308 Entries</div><div class="analyze-8308-stat-value">${analysisResult.total}</div></div>`;
     html += `<div class="analyze-8308-stat"><div class="analyze-8308-stat-label">Matching Values</div><div class="analyze-8308-stat-value">${analysisResult.matches}</div></div>`;
-    html += `<div class="analyze-8308-stat"><div class="analyze-8308-stat-label">Mismatches Found</div><div class="analyze-8308-stat-value" style="color: ${analysisResult.mismatches.length > 0 ? '#ef4444' : '#4ade80'}">${analysisResult.mismatches.length}</div></div>`;
+    html += `<div class="analyze-8308-stat"><div class="analyze-8308-stat-label">Mismatches Found</div><div class="analyze-8308-stat-value" style="color: ${analysisResult.mismatches.length > 0 ? "#ef4444" : "#4ade80"}">${analysisResult.mismatches.length}</div></div>`;
     html += `</div>`;
 
     if (analysisResult.mismatches.length > 0) {
@@ -990,85 +991,100 @@ function generateTimestamp12() {
     html += `</div></div>`;
     reportEl.innerHTML = html;
     reportEl.style.display = "block";
-
-    // Show proceed button
-    if (proceedBtn) {
-      proceedBtn.style.display = "inline-block";
-    }
+    proceedModifyBtn.style.display = "inline-block";
   }
 
-  /* wire run button */
-  runModifyBtn.addEventListener("click", async () => {
-    const src = sourceInput.files && sourceInput.files[0] ? sourceInput.files[0] : null;
-    const tgt = targetInput.files && targetInput.files[0] ? targetInput.files[0] : null;
-    console.log("Run modify: src=", src && src.name, "tgt=", tgt && tgt.name);
-    
-    if (!src || !tgt) {
-      alert("Please provide both SFTP and DutiesHeader files.");
-      return;
+  function renderModifyCompletion(summary) {
+    if (!reportEl) return;
+    const itemSummary = summary.itemGenerated
+      ? `<p><strong>DutiesItem:</strong> downloaded${summary.unmatchedItemCount > 0 ? ` with ${summary.unmatchedItemCount} unmatched transaction number(s) left blank` : ""}.</p>`
+      : `<p><strong>DutiesItem:</strong> not provided.</p>`;
+    reportEl.innerHTML = `<div class="analyze-report-container"><div class="analyze-8308-report"><h4>Modify Complete</h4><p><strong>DutiesHeader:</strong> downloaded with ${summary.insertedCount} new row(s).</p>${itemSummary}</div></div>`;
+    reportEl.style.display = "block";
+  }
+
+  async function runModifyWorkflow_MOD() {
+    const { metadata, sourceFile, targetFile, itemFile } = validateModifyInputs_MOD();
+    const sourceRows = await readExcelFile_MOD(sourceFile);
+    const targetRows = await readExcelFile_MOD(targetFile);
+    const preparedHeader = workflow.prepareHeaderRowsForModify({
+      targetRows,
+      metadata
+    });
+    const modifiedHeader = await buildModifiedHeaderRows_MOD({
+      sourceRows,
+      preparedHeader
+    });
+
+    downloadWorkbookFromRows_MOD(
+      modifiedHeader.rows,
+      buildOutputName_MOD(targetFile.name || "updated_target.xlsx", "_DutiesHeader"),
+      buildHeaderNumericConfig_MOD(modifiedHeader.rows, modifiedHeader.headerRowIndex)
+    );
+
+    let unmatchedItemCount = 0;
+    let itemGenerated = false;
+    if (itemFile) {
+      const itemRows = await readExcelFile_MOD(itemFile);
+      const preparedItem = workflow.prepareItemRowsWithCcn({
+        itemRows,
+        preparedHeader: {
+          rows: modifiedHeader.rows,
+          headerRowIndex: modifiedHeader.headerRowIndex
+        },
+        metadata
+      });
+      downloadWorkbookFromRows_MOD(
+        preparedItem.rows,
+        buildOutputName_MOD(itemFile.name || "updated_item.xlsx", "_DutiesItem")
+      );
+      unmatchedItemCount = preparedItem.unmatchedCount;
+      itemGenerated = true;
     }
 
-    try {
-      // Run 8308 analysis first and show report
-      const analysisResult = await analyze8308ValueForDuty(src, tgt);
-      renderModifyReport(analysisResult);
+    renderModifyCompletion({
+      insertedCount: modifiedHeader.insertedCount,
+      itemGenerated,
+      unmatchedItemCount
+    });
+    resetModifyBtn.style.display = "flex";
+  }
 
+  runModifyBtn.addEventListener("click", async () => {
+    try {
+      const { sourceFile, targetFile } = validateModifyInputs_MOD();
+      const analysisResult = await analyze8308ValueForDuty(sourceFile, targetFile);
+      renderModifyReport(analysisResult);
       if (!analysisResult.success) {
         alert("Analysis failed: " + analysisResult.error);
       }
-      // Stop here - user reviews report before proceeding
     } catch (err) {
       console.error("Error in modify flow:", err);
-      alert("Error: " + (err && err.message ? err.message : err));
+      alert(err && err.message ? err.message : String(err));
     }
   });
 
-  /* wire reset button */
   resetModifyBtn.addEventListener("click", () => {
-    // Reset the form, which clears the file inputs
-    if(modifyForm) modifyForm.reset();
-
-    // Clear file name displays
-    if(sourceFileName) sourceFileName.textContent = "";
-    if(targetFileName) targetFileName.textContent = "";
-
-    // Clear report
-    const reportEl = document.getElementById("modifyReport");
+    modifyForm.reset();
+    if (sourceFileName) sourceFileName.textContent = "";
+    if (targetFileName) targetFileName.textContent = "";
+    if (itemFileName) itemFileName.textContent = "";
     if (reportEl) {
       reportEl.innerHTML = "";
       reportEl.style.display = "none";
     }
-
-    // Hide the proceed button
-    const proceedBtn = document.getElementById("proceedModify");
-    if (proceedBtn) proceedBtn.style.display = "none";
-
-    // Hide the reset button
+    proceedModifyBtn.style.display = "none";
     resetModifyBtn.style.display = "none";
-
-    console.log("Modify Tool has been reset.");
   });
 
-  /* wire proceed button */
-  const proceedModifyBtn = document.getElementById("proceedModify");
-  if (proceedModifyBtn) {
-    proceedModifyBtn.addEventListener("click", async () => {
-      const src = sourceInput.files && sourceInput.files[0] ? sourceInput.files[0] : null;
-      const tgt = targetInput.files && targetInput.files[0] ? targetInput.files[0] : null;
-      
-      try {
-        await modifyAndDownloadExactMatch_MOD({ sourceFileObj: src, targetFileObj: tgt });
-        // Show reset button after modify completes
-        if (resetModifyBtn) {
-          resetModifyBtn.style.display = 'flex';
-        }
-      } catch (err) {
-        console.error("modify error:", err);
-        alert("Modify error: " + (err && err.message ? err.message : err));
-      }
-    });
-  }
-
+  proceedModifyBtn.addEventListener("click", async () => {
+    try {
+      await runModifyWorkflow_MOD();
+    } catch (err) {
+      console.error("modify error:", err);
+      alert("Modify error: " + (err && err.message ? err.message : err));
+    }
+  });
 })(); // end IIFE
 
 /**************************************************************

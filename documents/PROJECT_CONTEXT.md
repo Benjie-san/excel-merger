@@ -9,7 +9,7 @@ This app is a client-side Excel operations portal for customs workflows. It runs
 - Excel processing: `xlsx` (SheetJS) in browser
 - File download: `FileSaver`
 - Entrypoint server: `server.js`
-- Main UI/logic: `public/index.html`, `public/styles.css`, `public/script.js`
+- Main UI/logic: `public/index.html`, `public/styles.css`, `public/script.js`, `public/dt-header-workflow.js`
 
 ## Scope (current)
 The project currently has 3 user-facing tools:
@@ -32,9 +32,22 @@ The project currently has 3 user-facing tools:
 
 2. D/T Header File Modifier
 - Inputs:
+  - `CLIENT`
+  - `RPT NAME`
+  - `RPT DATE` (kept as text)
   - Source (SFTP file)
   - Target (`_DutiesHeader` file)
-- Reads target CCNs from column H (starting row index 5 / Excel row 6), with `8308` prefix cleanup on target side.
+  - Optional DutiesItem (`_DutiesItem` file)
+- Rewrites rows 1..3 in both header/item outputs:
+  - `CLIENT:`
+  - `RPT NAME:`
+  - `RPT DATE :`
+- Detects whether DutiesHeader and DutiesItem headers are on Excel row 4 or 5.
+- If headers are found on row 4, inserts one blank row so output headers land on row 5.
+- Analyze step remains first:
+  - compares DutiesHeader `8308...` entries in H/J against SFTP AC/AS
+  - blocks user review behind `Analyze 8308 Values` before modify/download
+- Reads target CCNs from column H starting below the detected header row, with `8308` prefix cleanup on target side.
 - Reads source values:
   - AC (CCN candidate)
   - AS (value for column J)
@@ -49,7 +62,12 @@ The project currently has 3 user-facing tools:
   - R = `DDP`
 - Inserts rows right after last non-empty target row (avoids large blank-gap append issue).
 - Converts `Value for Duty -> Exchange Rate` to numeric General format in output.
-- Auto-downloads output with refreshed 12-digit timestamp before `_DutiesHeader` when applicable.
+- Optional DutiesItem processing:
+  - ensures a `CCN` column exists
+  - builds a `Transaction Number -> CCN` lookup from the modified DutiesHeader output
+  - writes matching CCNs directly into DutiesItem
+  - leaves unmatched transaction numbers blank
+- Auto-downloads output(s) with refreshed 12-digit timestamp before `_DutiesHeader` / `_DutiesItem` when applicable.
 
 3. Header/Item Analyzer
 - Inputs:
@@ -81,12 +99,16 @@ The project currently has 3 user-facing tools:
 - `public/index.html`: all tool layouts and controls.
 - `public/styles.css`: layout/responsive styling, tool sections, report formatting.
 - `public/script.js`: all app behavior and Excel logic.
+- `public/dt-header-workflow.js`: shared D/T header/item normalization and CCN propagation helpers.
 - `views/index.ejs`: legacy minimal file, not primary UI.
 
 ## Key implementation assumptions
 - Merger assumes first file contributes the merged header row.
 - Merger currently skips first post-slice row only for file index 0 (first file), keeps row 0 for subsequent files.
 - SFTP AC/AS start row for modifier is fixed at row 3 (index 2).
+- D/T workflow header detection scans the first 10 rows and expects:
+  - Header mode: `Transaction Number` and `CCN`
+  - Item mode: `Transaction Number` and `Goods Description`
 - Analyzer header detection scans first 15 rows and chooses best match row by keyword scoring.
 
 ## Known risks for future work
