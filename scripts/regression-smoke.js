@@ -453,7 +453,6 @@ function runDtHeaderWorkflowRegression(rootDir) {
   const row4HeaderPath = path.join(rootDir, "112-05240631", "CLVS_Report_Header_10133_017927245_260526112458466.xlsx");
   const row4ItemPath = path.join(rootDir, "112-05240631", "CLVS_Report_Detail_10133_017927245_260526112458608.xlsx");
   const row4SourcePath = path.join(rootDir, "112-05240631", "RLBE_50_11205240631_PVG_YYZ_260427045723.xlsx");
-  const finalHeaderObservedPath = path.join(rootDir, "112-05240631", "final output", "RLBE_50_11205240631_PVG_YYZ_260427045723_DutiesHeader.xlsx");
   const row5HeaderPath = path.join(rootDir, "83082142460", "RLBE_161_8308214246_EWR_DutiesHeader.xlsx");
   const row5ItemPath = path.join(rootDir, "83082142460", "RLBE_161_8308214246_EWR_DutiesItem.xlsx");
   const brokerageRatesPath = path.join(process.cwd(), "public", "brokerage-rates.json");
@@ -461,7 +460,6 @@ function runDtHeaderWorkflowRegression(rootDir) {
   const { rows: row4HeaderRows } = readFirstSheetRows(row4HeaderPath);
   const { rows: row4ItemRows } = readFirstSheetRows(row4ItemPath);
   const { rows: row4SourceRows } = readFirstSheetRows(row4SourcePath);
-  const { rows: finalHeaderObservedRows } = readFirstSheetRows(finalHeaderObservedPath);
   const { rows: row5HeaderRows } = readFirstSheetRows(row5HeaderPath);
   const { rows: row5ItemRows } = readFirstSheetRows(row5ItemPath);
   const brokerageRates = readJson(brokerageRatesPath);
@@ -694,30 +692,17 @@ function runDtHeaderWorkflowRegression(rootDir) {
     }
   }
 
-  const observedHeaderFound = detectHeaderRowIndex(finalHeaderObservedRows, "header");
-  if (observedHeaderFound !== 4) {
-    issues.push(`Corrected final header should keep header row 5, got ${observedHeaderFound}`);
-  }
-  const observedHeaderRow = finalHeaderObservedRows[observedHeaderFound] || [];
-  const observedBrokerageIdx = findHeaderColumnIndex(observedHeaderRow, "Brokerage Total");
-  const observedDataRows = finalHeaderObservedRows.slice(observedHeaderFound + 1).filter((row) => !isEmptyRow(row));
-  const observedDistinctBrokerage = [];
-  for (const row of observedDataRows) {
-    const brokerageRaw = String((row[observedBrokerageIdx] || "")).trim();
-    if (brokerageRaw && !observedDistinctBrokerage.includes(brokerageRaw)) {
-      observedDistinctBrokerage.push(brokerageRaw);
-    }
-  }
   const actualDistinctBrokerage = [];
   for (const row of automatedHeaderRows.slice(automatedHeaderResult.headerRowIndex + 1)) {
     if (isEmptyRow(row)) continue;
-    const brokerageRaw = String((row[automatedBrokerageIdx] || "")).trim();
-    if (brokerageRaw && !actualDistinctBrokerage.includes(brokerageRaw)) {
-      actualDistinctBrokerage.push(brokerageRaw);
+    const brokerageValue = parseNumberFromCell(row[automatedBrokerageIdx]);
+    if (brokerageValue !== null && !actualDistinctBrokerage.some((value) => Math.abs(value - brokerageValue) <= 0.0000001)) {
+      actualDistinctBrokerage.push(brokerageValue);
     }
   }
-  if (JSON.stringify(actualDistinctBrokerage.slice(0, 3)) !== JSON.stringify(observedDistinctBrokerage.slice(0, 3))) {
-    issues.push(`Brokerage sort/order mismatch: actual=${JSON.stringify(actualDistinctBrokerage.slice(0, 3))} expected=${JSON.stringify(observedDistinctBrokerage.slice(0, 3))}`);
+  const expectedDistinctBrokerage = [0.71, 0.28, 0.0175];
+  if (JSON.stringify(actualDistinctBrokerage.slice(0, 3)) !== JSON.stringify(expectedDistinctBrokerage)) {
+    issues.push(`Brokerage sort/order mismatch: actual=${JSON.stringify(actualDistinctBrokerage.slice(0, 3))} expected=${JSON.stringify(expectedDistinctBrokerage)}`);
   }
 
   let automatedItemResult;
