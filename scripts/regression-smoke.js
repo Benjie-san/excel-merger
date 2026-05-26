@@ -401,6 +401,10 @@ function compareObjects(actual, expected) {
   return issues;
 }
 
+function findHeaderColumnIndex(row, expectedLabel) {
+  return (row || []).findIndex((cell) => normalizeHeaderCell(cell) === normalizeHeaderCell(expectedLabel));
+}
+
 function runDtHeaderWorkflowRegression(rootDir) {
   const issues = [];
   let workflowModule;
@@ -415,14 +419,18 @@ function runDtHeaderWorkflowRegression(rootDir) {
 
   const {
     detectHeaderRowIndex,
-    runDtHeaderWorkflow
+    prepareHeaderRowsForModify,
+    prepareItemRowsWithCcn
   } = workflowModule || {};
 
   if (typeof detectHeaderRowIndex !== "function") {
     issues.push("Missing export: detectHeaderRowIndex");
   }
-  if (typeof runDtHeaderWorkflow !== "function") {
-    issues.push("Missing export: runDtHeaderWorkflow");
+  if (typeof prepareHeaderRowsForModify !== "function") {
+    issues.push("Missing export: prepareHeaderRowsForModify");
+  }
+  if (typeof prepareItemRowsWithCcn !== "function") {
+    issues.push("Missing export: prepareItemRowsWithCcn");
   }
   if (issues.length) return { issues };
 
@@ -436,10 +444,10 @@ function runDtHeaderWorkflowRegression(rootDir) {
   const { rows: row5HeaderRows } = readFirstSheetRows(row5HeaderPath);
   const { rows: row5ItemRows } = readFirstSheetRows(row5ItemPath);
 
-  const row4HeaderIndex = detectHeaderRowIndex(row4HeaderRows);
-  const row4ItemIndex = detectHeaderRowIndex(row4ItemRows);
-  const row5HeaderIndex = detectHeaderRowIndex(row5HeaderRows);
-  const row5ItemIndex = detectHeaderRowIndex(row5ItemRows);
+  const row4HeaderIndex = detectHeaderRowIndex(row4HeaderRows, "header");
+  const row4ItemIndex = detectHeaderRowIndex(row4ItemRows, "item");
+  const row5HeaderIndex = detectHeaderRowIndex(row5HeaderRows, "header");
+  const row5ItemIndex = detectHeaderRowIndex(row5ItemRows, "item");
 
   if (row4HeaderIndex !== 3) issues.push(`Row-4 header detection failed for CLVS header: got ${row4HeaderIndex}, expected 3`);
   if (row4ItemIndex !== 3) issues.push(`Row-4 header detection failed for CLVS item: got ${row4ItemIndex}, expected 3`);
@@ -453,26 +461,20 @@ function runDtHeaderWorkflowRegression(rootDir) {
     reportDate: "05/27/2026"
   };
 
-  let workflowResult;
+  let actualHeaderRows;
   try {
-    workflowResult = runDtHeaderWorkflow({
-      headerRows: cloneRows(row4HeaderRows),
-      itemRows: cloneRows(row4ItemRows),
+    actualHeaderRows = prepareHeaderRowsForModify({
+      targetRows: cloneRows(row4HeaderRows),
       metadata
     });
   } catch (err) {
     return {
-      issues: [`runDtHeaderWorkflow threw: ${err.message}`]
+      issues: [`prepareHeaderRowsForModify threw: ${err.message}`]
     };
   }
 
-  const actualHeaderRows = workflowResult && workflowResult.headerRows;
-  const actualItemRows = workflowResult && workflowResult.itemRows;
   if (!Array.isArray(actualHeaderRows)) {
-    issues.push("runDtHeaderWorkflow should return headerRows.");
-  }
-  if (!Array.isArray(actualItemRows)) {
-    issues.push("runDtHeaderWorkflow should return itemRows.");
+    issues.push("prepareHeaderRowsForModify should return header rows.");
   }
   if (issues.length) return { issues };
 
@@ -488,6 +490,24 @@ function runDtHeaderWorkflowRegression(rootDir) {
   if (typeof ((actualHeaderRows[2] || [])[1]) !== "string") {
     issues.push(`Header report date should remain text, got type ${typeof ((actualHeaderRows[2] || [])[1])}`);
   }
+
+  let actualItemRows;
+  try {
+    actualItemRows = prepareItemRowsWithCcn({
+      itemRows: cloneRows(row4ItemRows),
+      headerRows: cloneRows(row4HeaderRows),
+      metadata
+    });
+  } catch (err) {
+    return {
+      issues: [`prepareItemRowsWithCcn threw: ${err.message}`]
+    };
+  }
+
+  if (!Array.isArray(actualItemRows)) {
+    issues.push("prepareItemRowsWithCcn should return item rows.");
+  }
+  if (issues.length) return { issues };
 
   if (String((actualItemRows[0] || [])[1] || "").trim() !== metadata.client) {
     issues.push(`Item metadata client mismatch: got ${JSON.stringify((actualItemRows[0] || [])[1] || "")}`);
@@ -524,26 +544,34 @@ function runDtHeaderWorkflowRegression(rootDir) {
   if (ccnIdx === -1) issues.push("Item workflow output is missing CCN.");
 
   if (transactionIdx !== -1 && ccnIdx !== -1) {
+    const sourceHeaderRow = row4HeaderRows[row4HeaderIndex] || [];
+    const sourceTransactionIdx = findHeaderColumnIndex(sourceHeaderRow, "Transaction Number");
+    const sourceCcnIdx = findHeaderColumnIndex(sourceHeaderRow, "CCN");
+    if (sourceTransactionIdx === -1) issues.push("Source header workbook is missing Transaction Number.");
+    if (sourceCcnIdx === -1) issues.push("Source header workbook is missing CCN.");
+
     const expectedCcnByTransaction = new Map();
-    for (let r = row4HeaderIndex + 1; r < row4HeaderRows.length; r++) {
-      const row = row4HeaderRows[r] || [];
-      const transaction = String(row[0] || "").trim();
-      const ccn = String(row[1] || "").trim();
-      if (transaction && ccn) expectedCcnByTransaction.set(transaction, ccn);
-    }
+    if (sourceTransactionIdx !== -1 && sourceCcnIdx !== -1) {
+      for (let r = row4HeaderIndex + 1; r < row4HeaderRows.length; r++) {
+        const row = row4HeaderRows[r] || [];
+        const transaction = String(row[sourceTransactionIdx] || "").trim();
+        const ccn = String(row[sourceCcnIdx] || "").trim();
+        if (transaction && ccn) expectedCcnByTransaction.set(transaction, ccn);
+      }
 
-    for (let r = 5; r < actualItemRows.length; r++) {
-      const row = actualItemRows[r] || [];
-      if (isEmptyRow(row)) continue;
-      const transaction = String(row[transactionIdx] || "").trim();
-      if (!transaction) continue;
-      const expectedCcn = expectedCcnByTransaction.get(transaction);
-      if (!expectedCcn) continue;
+      for (let r = 5; r < actualItemRows.length; r++) {
+        const row = actualItemRows[r] || [];
+        if (isEmptyRow(row)) continue;
+        const transaction = String(row[transactionIdx] || "").trim();
+        if (!transaction) continue;
+        const expectedCcn = expectedCcnByTransaction.get(transaction);
+        if (!expectedCcn) continue;
 
-      const actualCcn = String(row[ccnIdx] || "").trim();
-      if (actualCcn !== expectedCcn) {
-        issues.push(`Item CCN fill mismatch for transaction ${transaction}: got ${JSON.stringify(actualCcn)} expected ${JSON.stringify(expectedCcn)}`);
-        break;
+        const actualCcn = String(row[ccnIdx] || "").trim();
+        if (actualCcn !== expectedCcn) {
+          issues.push(`Item CCN fill mismatch for transaction ${transaction}: got ${JSON.stringify(actualCcn)} expected ${JSON.stringify(expectedCcn)}`);
+          break;
+        }
       }
     }
   }
