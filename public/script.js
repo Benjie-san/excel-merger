@@ -727,7 +727,14 @@ function generateTimestamp12() {
     if (numericConfig) {
       for (let r = numericConfig.startRowIndex; r < rows.length; r++) {
         const row = rows[r] || [];
-        for (let c = numericConfig.startColIndex; c <= numericConfig.endColIndex; c++) {
+        const columns = Array.isArray(numericConfig.columns)
+          ? numericConfig.columns
+          : Array.from(
+              { length: numericConfig.endColIndex - numericConfig.startColIndex + 1 },
+              (_, idx) => numericConfig.startColIndex + idx
+            );
+
+        for (const c of columns) {
           const num = parseNumberFromCell_MOD(row[c]);
           if (num !== null) {
             setWorksheetNumber(ws, r, c, num, numericConfig.format);
@@ -741,10 +748,19 @@ function generateTimestamp12() {
     downloadBlobFile(new Blob([s2ab_MOD(wbout)], { type: "application/octet-stream" }), fileName);
   }
 
+  function normalizeReportName_MOD(value) {
+    const trimmed = String(value || "").trim();
+    if (!trimmed) return "";
+    if (/^awb#\s*/i.test(trimmed)) {
+      return `AWB# ${trimmed.replace(/^awb#\s*/i, "").trim()}`;
+    }
+    return `AWB# ${trimmed}`;
+  }
+
   function readMetadata_MOD() {
     return {
       client: String(clientInput?.value || "").trim(),
-      reportName: String(reportNameInput?.value || "").trim(),
+      reportName: normalizeReportName_MOD(reportNameInput?.value || ""),
       reportDate: String(reportDateInput?.value || "").trim()
     };
   }
@@ -871,6 +887,32 @@ function generateTimestamp12() {
       startColIndex: colStart,
       endColIndex: colEnd,
       format: ACCOUNTING_FORMAT_MOD
+    };
+  }
+
+  function buildItemNumericConfig_MOD(rows, headerRowIndex) {
+    const headerRow = rows[headerRowIndex] || [];
+    const numericLabels = [
+      "Line #",
+      "Quantity",
+      "Value for Duty",
+      "Duty Rate",
+      "Duty",
+      "Value for Tax",
+      "Gov. Sales Tax"
+    ];
+    const columns = numericLabels
+      .map((label) => headerRow.indexOf(label))
+      .filter((index) => index !== -1);
+
+    if (!columns.length) {
+      return null;
+    }
+
+    return {
+      startRowIndex: headerRowIndex + 1,
+      columns,
+      format: "0.00############"
     };
   }
 
@@ -1118,7 +1160,8 @@ function generateTimestamp12() {
       });
       downloadWorkbookFromRows_MOD(
         preparedItem.rows,
-        buildOutputName_MOD(sourceFile.name || "updated_source.xlsx", "_DutiesItem")
+        buildOutputName_MOD(sourceFile.name || "updated_source.xlsx", "_DutiesItem"),
+        buildItemNumericConfig_MOD(preparedItem.rows, preparedItem.headerRowIndex)
       );
       unmatchedItemCount = preparedItem.unmatchedCount;
       itemGenerated = true;
