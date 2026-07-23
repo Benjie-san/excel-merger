@@ -1849,7 +1849,7 @@ function generateTimestamp12() {
     }
 
     const missing = specs
-      .filter((spec) => found.indexMap[spec.key] === -1)
+      .filter((spec) => !spec.optional && found.indexMap[spec.key] === -1)
       .map((spec) => spec.label);
 
     if (missing.length) {
@@ -1870,6 +1870,7 @@ function generateTimestamp12() {
 
       const gst = parseNumberZero(row[itemIndexMap.gst]);
       const pst = parseNumberZero(row[itemIndexMap.pst]);
+      const surtax = parseNumberZero(row[itemIndexMap.surtax]);
       const govSalesTax = gst + pst;
 
       records.push({
@@ -1888,6 +1889,7 @@ function generateTimestamp12() {
         duty: parseNumberZero(row[itemIndexMap.customsDuty]),
         valueForTax: parseNumberZero(row[itemIndexMap.valueForTax]),
         govSalesTax,
+        surtax,
         incoTerms: sanitizeExcelText(row[itemIndexMap.paymentTerms]),
         ccn,
         safeCcn: sanitizeExcelText(ccn)
@@ -1910,6 +1912,7 @@ function generateTimestamp12() {
       const headerDuty = parseNumberZero(row[headerIndexMap.totalCustomsDuties]);
       const headerGst = parseNumberZero(row[headerIndexMap.totalGst]);
       const headerPst = parseNumberZero(row[headerIndexMap.totalProvincialSalesTax]);
+      const headerSurtax = parseNumberZero(row[headerIndexMap.surtax]);
       const recomputedHeaderGst = headerGst + headerPst;
 
       records.push({
@@ -1927,6 +1930,7 @@ function generateTimestamp12() {
         // Explicitly recompute GST from Header GST + Header PST.
         // Keep zero values as zero (no blank fallback).
         govSalesTax: recomputedHeaderGst,
+        surtax: headerSurtax,
         brokerageTotal: "",
         addlChargesTotal: 0,
         assessmentTotal: 0,
@@ -1961,6 +1965,7 @@ function generateTimestamp12() {
       "Duty",
       "Value for Tax",
       "Gov. Sales Tax",
+      "Surtax",
       "Inco Terms",
       "CCN"
     ]);
@@ -1982,6 +1987,7 @@ function generateTimestamp12() {
         rec.duty,
         rec.valueForTax,
         rec.govSalesTax,
+        rec.surtax,
         rec.incoTerms,
         rec.safeCcn
       ]);
@@ -2010,6 +2016,7 @@ function generateTimestamp12() {
       "Value for Duty",
       "Duty",
       "Gov. Sales Tax",
+      "Surtax",
       "Brokerage Total",
       "Addl. Charges Total",
       "Assessment Total",
@@ -2032,6 +2039,7 @@ function generateTimestamp12() {
         rec.valueForDuty,
         rec.duty,
         rec.govSalesTax,
+        rec.surtax,
         rec.brokerageTotal,
         rec.addlChargesTotal,
         rec.assessmentTotal,
@@ -2083,18 +2091,18 @@ function generateTimestamp12() {
     const ws = XLSX.utils.aoa_to_sheet(headerAoA);
 
     const fmtJtoL = '_("$"* #,##0.00_);_("$"* \\(#,##0.00\\);_("$"* "-"??_);_(@_)';
-    const fmtMtoQ = '_([$$-409]* #,##0.00_);_([$$-409]* \\(#,##0.00\\);_([$$-409]* "-"??_);_(@_)';
+    const fmtMtoR = '_([$$-409]* #,##0.00_);_([$$-409]* \\(#,##0.00\\);_([$$-409]* "-"??_);_(@_)';
 
     for (let r = 5; r < headerAoA.length; r++) {
-      for (let c = 9; c <= 16; c++) {
+      for (let c = 9; c <= 17; c++) {
         const raw = (headerAoA[r] && headerAoA[r][c] !== undefined) ? headerAoA[r][c] : 0;
-        if (c === 12 && isEmptyCell(raw)) {
+        if (c === 13 && isEmptyCell(raw)) {
           const brokerageRef = XLSX.utils.encode_cell({ r, c });
           delete ws[brokerageRef];
           continue;
         }
         const num = parseNumberZero(raw);
-        const fmt = c <= 11 ? fmtJtoL : fmtMtoQ;
+        const fmt = c <= 11 ? fmtJtoL : fmtMtoR;
         formatAsDollarNumber(ws, r, c, num, fmt);
       }
     }
@@ -2126,6 +2134,7 @@ function generateTimestamp12() {
       { key: "totalValueForDuty", label: "Total Value For Duty (CAD)", matchers: [/total value for duty/i] },
       { key: "totalCustomsDuties", label: "Total Customs Duties (CAD)", matchers: [/total customs duties/i] },
       { key: "totalGst", label: "Total GST (CAD)", matchers: [/^total gst/i] },
+      { key: "surtax", label: "Surtax (CAD)", optional: true, matchers: [/^surtax/i] },
       { key: "totalProvincialSalesTax", label: "Total Provincial Sales Tax (CAD)", matchers: [/total provincial sales tax/i] },
       { key: "paymentTerms", label: "Payment Terms", matchers: [/^payment terms$/i, /^inco terms$/i] },
       { key: "billOfLading", label: "Bill of Lading", matchers: [/bill of lading/i, /\bawb\b/i] }
@@ -2147,6 +2156,7 @@ function generateTimestamp12() {
       { key: "valueForTax", label: "Value for Tax (CAD)", matchers: [/value for tax/i] },
       { key: "gst", label: "GST (CAD)", matchers: [/^gst/i, /gov\.?\s*sales/i] },
       { key: "pst", label: "Provincial Sales Tax (CAD)", matchers: [/provincial sales tax/i, /\bpst\b/i] },
+      { key: "surtax", label: "Surtax (CAD)", optional: true, matchers: [/^surtax/i] },
       { key: "paymentTerms", label: "Payment Terms", matchers: [/^payment terms$/i, /^inco terms$/i] },
       { key: "ccn", label: "Cargo Control Number", matchers: [/cargo control number/i, /^ccn$/i] },
       { key: "billOfLading", label: "Bill of Lading", matchers: [/bill of lading/i, /\bawb\b/i] }
