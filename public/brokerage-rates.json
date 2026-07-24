@@ -78,11 +78,15 @@
         "SPRING GDS - AU",
         "EPOST GLOBAL",
         "DHL ECommerce LA",
-        "LOGASIA"
+        "LOGASIA",
+        "DELHIVERY LIMITED",
+        "SILVERLINE SOLUTIONS LTD"
+
       ]
     }
   },
   "overrides": {
+    
     "FEDEX": {
       "clvs": 0.35,
       "lvs": 0.35,
@@ -105,6 +109,18 @@
     }
   },
   "clientRateLookup": {
+    "DELHIVERY LIMITED": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.085,
+      "source": "group:non_china_origin"
+    },
+    "SILVERLINE SOLUTIONS LTD": {
+      "pga": 0.71,
+      "lvs": 0.28,
+      "clvs": 0.085,
+      "source": "group:non_china_origin"
+    },
     "233 TRANS": {
       "pga": 0.71,
       "lvs": 0.28,
