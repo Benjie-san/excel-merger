@@ -1671,6 +1671,7 @@ function generateTimestamp12() {
 
   const runCandataBtn = document.getElementById("runCandata");
   const resetCandataBtn = document.getElementById("resetCandataBtn");
+  const surtaxToggle = document.getElementById("candataSurtaxToggle");
 
   if (!candataForm || !headerDrop || !headerInput || !itemDrop || !itemInput) return;
 
@@ -1942,14 +1943,15 @@ function generateTimestamp12() {
     return stableSortByGstDesc(records, "govSalesTax");
   }
 
-  function buildItemOutputAoA(itemRecords, reportName, reportDate, clientName) {
+  function buildItemOutputAoA(itemRecords, reportName, reportDate, clientName, options = {}) {
+    const includeSurtax = options.includeSurtax === true;
     const aoa = [];
     aoa.push(["CLIENT:", clientName]);
     aoa.push(["RPT NAME:", reportName || "AWB #"]);
     aoa.push(["RPT DATE :", reportDate || ""]);
     aoa.push([]);
 
-    aoa.push([
+    const outputHeaders = [
       "Transaction Number",
       "Goods Description",
       "Line #",
@@ -1965,13 +1967,14 @@ function generateTimestamp12() {
       "Duty",
       "Value for Tax",
       "Gov. Sales Tax",
-      "Surtax",
       "Inco Terms",
       "CCN"
-    ]);
+    ];
+    if (includeSurtax) outputHeaders.splice(15, 0, "Surtax");
+    aoa.push(outputHeaders);
 
     itemRecords.forEach((rec) => {
-      aoa.push([
+      const outputRow = [
         rec.transactionNumber,
         rec.goodsDescription,
         rec.lineNumber,
@@ -1987,23 +1990,25 @@ function generateTimestamp12() {
         rec.duty,
         rec.valueForTax,
         rec.govSalesTax,
-        rec.surtax,
         rec.incoTerms,
         rec.safeCcn
-      ]);
+      ];
+      if (includeSurtax) outputRow.splice(15, 0, rec.surtax);
+      aoa.push(outputRow);
     });
 
     return aoa;
   }
 
-  function buildHeaderOutputAoA(headerRecords, reportName, reportDate, clientName) {
+  function buildHeaderOutputAoA(headerRecords, reportName, reportDate, clientName, options = {}) {
+    const includeSurtax = options.includeSurtax === true;
     const aoa = [];
     aoa.push(["CLIENT:", clientName]);
     aoa.push(["RPT NAME:", reportName]);
     aoa.push(["RPT DATE :", reportDate]);
     aoa.push([]);
 
-    aoa.push([
+    const outputHeaders = [
       "Transaction Number",
       "CCN",
       "Port #",
@@ -2016,17 +2021,18 @@ function generateTimestamp12() {
       "Value for Duty",
       "Duty",
       "Gov. Sales Tax",
-      "Surtax",
       "Brokerage Total",
       "Addl. Charges Total",
       "Assessment Total",
       "Excise Tax Total",
       "Exchange Rate",
       "Inco Terms"
-    ]);
+    ];
+    if (includeSurtax) outputHeaders.splice(12, 0, "Surtax");
+    aoa.push(outputHeaders);
 
     headerRecords.forEach((rec) => {
-      aoa.push([
+      const outputRow = [
         rec.transactionNumber,
         rec.ccn,
         rec.port,
@@ -2039,14 +2045,15 @@ function generateTimestamp12() {
         rec.valueForDuty,
         rec.duty,
         rec.govSalesTax,
-        rec.surtax,
         rec.brokerageTotal,
         rec.addlChargesTotal,
         rec.assessmentTotal,
         rec.exciseTaxTotal,
         rec.exchangeRate,
         rec.incoTerms
-      ]);
+      ];
+      if (includeSurtax) outputRow.splice(12, 0, rec.surtax);
+      aoa.push(outputRow);
     });
 
     return aoa;
@@ -2092,11 +2099,14 @@ function generateTimestamp12() {
 
     const fmtJtoL = '_("$"* #,##0.00_);_("$"* \\(#,##0.00\\);_("$"* "-"??_);_(@_)';
     const fmtMtoR = '_([$$-409]* #,##0.00_);_([$$-409]* \\(#,##0.00\\);_([$$-409]* "-"??_);_(@_)';
+    const headerRow = headerAoA[4] || [];
+    const brokerageIndex = headerRow.indexOf("Brokerage Total");
+    const lastNumericIndex = headerRow.indexOf("Exchange Rate");
 
     for (let r = 5; r < headerAoA.length; r++) {
-      for (let c = 9; c <= 17; c++) {
+      for (let c = 9; c <= lastNumericIndex; c++) {
         const raw = (headerAoA[r] && headerAoA[r][c] !== undefined) ? headerAoA[r][c] : 0;
-        if (c === 13 && isEmptyCell(raw)) {
+        if (c === brokerageIndex && isEmptyCell(raw)) {
           const brokerageRef = XLSX.utils.encode_cell({ r, c });
           delete ws[brokerageRef];
           continue;
@@ -2117,6 +2127,7 @@ function generateTimestamp12() {
   async function runConversion() {
     const headerFile = headerInput.files && headerInput.files[0] ? headerInput.files[0] : null;
     const itemFile = itemInput.files && itemInput.files[0] ? itemInput.files[0] : null;
+    const includeSurtax = !!(surtaxToggle && surtaxToggle.checked);
 
     if (!headerFile || !itemFile) {
       alert("Please provide both DutiesHeader and Candata Item files.");
@@ -2212,13 +2223,15 @@ function generateTimestamp12() {
         headerRecords,
         headerReportName,
         firstReleaseDate || "",
-        clientName
+        clientName,
+        { includeSurtax }
       );
       const itemAoA = buildItemOutputAoA(
         itemRecords,
         headerReportName,
         firstReleaseDate || "",
-        clientName
+        clientName,
+        { includeSurtax }
       );
 
       const headerDownload = buildHeaderWorkbookDownload(headerAoA, headerSheetName, headerFile.name);

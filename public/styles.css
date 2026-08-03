@@ -560,6 +560,22 @@ input[type="checkbox"]:checked {
     cursor: pointer;
   }
   
+  .candata-surtax-toggle {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 8px 0 4px;
+    color: #d1d5db;
+    cursor: pointer;
+  }
+
+  .candata-surtax-toggle input {
+    width: 16px;
+    height: 16px;
+    accent-color: #ff581f;
+  }
+
   .btn-primary {
     background: #ff581f;
     color: white;
