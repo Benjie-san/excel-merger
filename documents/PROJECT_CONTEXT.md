@@ -45,15 +45,16 @@ The project currently has 3 user-facing tools:
 - Detects whether DutiesHeader and DutiesItem headers are on Excel row 4 or 5.
 - If headers are found on row 4, inserts one blank row so output headers land on row 5.
 - Analyze step remains first:
-  - compares DutiesHeader `8308...` entries in H/J against SFTP AC/AS
+  - compares DutiesHeader `8308...` CCNs and column J values against SFTP AC/AS
   - blocks user review behind `Analyze 8308 Values` before modify/download
-- Reads target CCNs from column H starting below the detected header row, with `8308` prefix cleanup on target side.
+- Resolves target CCNs per row using `CCN`, then `Cargo Control Number`, then `Order Number` (first nonblank value), with `8308` prefix cleanup on the target side. The same precedence applies to the 8308 review, insertion deduplication, classification, validation identifiers, and Item mapping.
 - Reads source values:
   - AC (CCN candidate)
   - AS (value for column J)
 - Deduplicates source AC values before insert.
 - Inserts only new CCNs (exact match check against cleaned target set).
 - New row mapping:
+  - The D/T Header template retains its existing fixed column layout; alias support accepts alternate identifier labels/blank CCN cells and does not imply arbitrary column reordering or deletion.
   - A = `CLVS`
   - B and H = source AC
   - J = source AS
@@ -83,6 +84,13 @@ The project currently has 3 user-facing tools:
   - blank brokerage fee row count
   - whether the client matched the brokerage JSON
   - header vs item Duty/GST total match when DutiesItem is provided
+- Post-processing validation runs on the final transformed rows before workbook download:
+  - DutiesHeader fields: `Value for Duty`, `Duty`, and `Gov. Sales Tax`.
+  - DutiesItem fields: `Quantity`, `Value for Duty`, `Duty`, `Value for Tax`, and `Gov. Sales Tax`.
+  - Blank/null cells and exact numeric zero values (including formatted/accounting zero) are warnings. Tiny nonzero values are not zero. This is a blank/zero check, not a general numeric-format validator.
+  - Findings show the output Excel row and resolved CCN; Item findings also show `Transaction Number` and `Line #`.
+  - All findings remain visible. Counts and record labels distinguish uploaded report rows from generated Header rows, which intentionally contain default zero amounts. Provenance is tracked separately through sorting and does not add workbook columns.
+  - Missing validation columns are blocking errors before either download; findings themselves do not block downloads.
 
 3. Header/Item Analyzer
 - Inputs:
@@ -97,7 +105,7 @@ The project currently has 3 user-facing tools:
     - Threshold `>20.1` normally
     - Threshold `>40.1` when brokerage fee is `2.25`
   - Value for Duty `<20` with Duty/GST `>0` CCNs
-- Item section display is currently removed from report body.
+- Standalone Header/Item Analyzer item section display is currently removed from its report body.
 - If item file is provided, bottom "Totals Match" compares Header vs Item totals for Duty and GST.
 
 ## UI structure
@@ -123,7 +131,7 @@ The project currently has 3 user-facing tools:
 - Merger currently skips first post-slice row only for file index 0 (first file), keeps row 0 for subsequent files.
 - SFTP AC/AS start row for modifier is fixed at row 3 (index 2).
 - D/T workflow header detection scans the first 10 rows and expects:
-  - Header mode: `Transaction Number` and `CCN`
+  - Header mode: `Transaction Number` and at least one of `CCN`, `Cargo Control Number`, or `Order Number`
   - Item mode: `Transaction Number` and `Goods Description`
 - Analyzer header detection scans first 15 rows and chooses best match row by keyword scoring.
 

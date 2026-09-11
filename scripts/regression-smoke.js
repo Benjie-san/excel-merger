@@ -746,6 +746,148 @@ function runDtHeaderWorkflowRegression(rootDir) {
     if (typeof combinedSummary.compare.gstMatch !== "boolean") {
       issues.push(`Expected boolean gstMatch, got ${typeof combinedSummary.compare.gstMatch}`);
     }
+    if (!combinedSummary.validation || !combinedSummary.validation.header || !combinedSummary.validation.item) {
+      issues.push("summarizeDtOutputs should return Header and Item validation results.");
+    }
+  }
+
+  const validationHeaderRows = [
+    ["CLIENT:", "TEST"],
+    ["RPT NAME:", "TEST REPORT"],
+    ["RPT DATE :", "05/27/2026"],
+    ["Transaction Number", "CCN", "Order Number", "Value for Duty", "Duty", "Gov. Sales Tax"],
+    ["TX-1", "CCN-1", "ORD-1", "0.00", "", "$0.00"],
+    ["TX-2", "", "ORD-2", "0.00", "1.00", "2.00"],
+    ["", "", "", "", "", ""]
+  ];
+  const headerValidation = workflowModule.validateReportRows(validationHeaderRows, "header");
+  if (headerValidation.error) {
+    issues.push(`Header validation fixture unexpectedly failed: ${headerValidation.error}`);
+  } else {
+    if (headerValidation.issueCount !== 4 || headerValidation.blankCount !== 1 || headerValidation.zeroCount !== 3) {
+      issues.push(`Header validation counts mismatch: ${JSON.stringify({ issueCount: headerValidation.issueCount, blankCount: headerValidation.blankCount, zeroCount: headerValidation.zeroCount })}`);
+    }
+    const orderFallbackIssue = headerValidation.issues.find((issue) => issue.transactionNumber === "TX-2");
+    if (!orderFallbackIssue || orderFallbackIssue.ccn !== "ORD-2") {
+      issues.push(`Header validation should use Order Number as the CCN fallback: ${JSON.stringify(orderFallbackIssue)}`);
+    }
+  }
+
+  const validationItemRows = [
+    ["CLIENT:", "TEST"],
+    ["RPT NAME:", "TEST REPORT"],
+    ["RPT DATE :", "05/27/2026"],
+    ["Transaction Number", "Goods Description", "Line #", "Quantity", "Value for Duty", "Duty", "Value for Tax", "Gov. Sales Tax", "CCN"],
+    ["TX-1", "ITEM A", "1", "0", "", "$0.00", "12.00", "1.00", "CCN-1"],
+    ["TX-2", "ITEM B", "2", "", "5.00", "2.00", "0.00", "0.00", "CCN-2"],
+    ["", "", "", "", "", "", "", "", ""]
+  ];
+  const itemValidation = workflowModule.validateReportRows(validationItemRows, "item");
+  if (itemValidation.error) {
+    issues.push(`Item validation fixture unexpectedly failed: ${itemValidation.error}`);
+  } else {
+    if (itemValidation.issueCount !== 6 || itemValidation.blankCount !== 2 || itemValidation.zeroCount !== 4) {
+      issues.push(`Item validation counts mismatch: ${JSON.stringify({ issueCount: itemValidation.issueCount, blankCount: itemValidation.blankCount, zeroCount: itemValidation.zeroCount })}`);
+    }
+    const itemIssue = itemValidation.issues.find((issue) => issue.transactionNumber === "TX-1" && issue.field === "Quantity");
+    if (!itemIssue || itemIssue.ccn !== "CCN-1" || itemIssue.lineNumber !== "1") {
+      issues.push(`Item validation should identify CCN, Transaction Number, and Line Number: ${JSON.stringify(itemIssue)}`);
+    }
+  }
+
+  const missingValueForTax = validationItemRows.map((row) => row.slice(0, 6).concat(row.slice(7)));
+  const missingColumnValidation = workflowModule.validateReportRows(missingValueForTax, "item");
+  if (!missingColumnValidation.error || !/Value for Tax/i.test(missingColumnValidation.error)) {
+    issues.push(`Missing Item validation columns should be reported: ${JSON.stringify(missingColumnValidation)}`);
+  }
+
+  let headerOnlySummary;
+  try {
+    headerOnlySummary = summarizeDtOutputs({ headerRows: automatedHeaderRows });
+  } catch (err) {
+    issues.push(`Header-only summarizeDtOutputs threw: ${err.message}`);
+  }
+  if (headerOnlySummary && headerOnlySummary.validation && headerOnlySummary.validation.item !== null) {
+    issues.push("Header-only validation should not create an Item result.");
+  }
+
+  // Exercise every monitored field, including fractional quantities below the old tolerance.
+  for (const [mode, base, fieldLabels] of [
+    ["header", validationHeaderRows, ["Value for Duty", "Duty", "Gov. Sales Tax"]],
+    ["item", validationItemRows, ["Quantity", "Value for Duty", "Duty", "Value for Tax", "Gov. Sales Tax"]]
+  ]) {
+    const headerIndex = detectHeaderRowIndex(base, mode);
+    const header = base[headerIndex];
+    const fieldIndexes = fieldLabels.map((label) => header.indexOf(label));
+    for (const value of [0, -0, "0", "$0.00", "(0.00)", "0.00-", "$ -", "-", "0e-8", 1e-8, -1e-8, "0.00000001", "-0.00000001", "$0.00000001", "0oops"]) {
+      const rows = cloneRows(base.slice(0, headerIndex + 1));
+      const row = new Array(header.length).fill("IDENTIFIER");
+      fieldIndexes.forEach((index) => { row[index] = value; });
+      rows.push(row);
+      const result = workflowModule.validateReportRows(rows, mode);
+      const expected = [1e-8, -1e-8, "0.00000001", "-0.00000001", "$0.00000001", "0oops"].includes(value) ? 0 : fieldLabels.length;
+      if (result.issueCount !== expected) issues.push(`${mode} exact-zero case ${JSON.stringify(value)}: ${result.issueCount} warnings, expected ${expected}`);
+    }
+  }
+
+  // Real supplied uploads and their final transformed outputs retain every warning.
+  const rawHeaderValidation = workflowModule.validateReportRows(row4HeaderRows, "header");
+  const rawItemValidation = workflowModule.validateReportRows(row4ItemRows, "item");
+  if (rawHeaderValidation.zeroCount !== 34 || rawHeaderValidation.blankCount !== 0 || rawHeaderValidation.rowsChecked !== 74) {
+    issues.push("Supplied raw Header should contain 74 rows with exactly 34 Duty zeros.");
+  }
+  if (rawItemValidation.zeroCount !== 38 || rawItemValidation.blankCount !== 2 || rawItemValidation.rowsChecked !== 116) {
+    issues.push("Supplied raw Item should contain 116 rows with 38 Duty zeros and 2 Duty blanks.");
+  }
+  const finalValidation = summarizeDtOutputs({
+    headerRows: automatedHeaderRows,
+    itemRows: actualItemResult.rows,
+    generatedHeaderRowNumbers: automatedHeaderResult.generatedRowNumbers
+  }).validation;
+  if (finalValidation.header.issueCount !== 316 || finalValidation.header.uploadedIssueCount !== 34 || finalValidation.header.generatedIssueCount !== 282) {
+    issues.push(`Processed Header warning provenance mismatch: ${JSON.stringify({ total: finalValidation.header.issueCount, uploaded: finalValidation.header.uploadedIssueCount, generated: finalValidation.header.generatedIssueCount })}`);
+  }
+  if (finalValidation.item.issueCount !== 40 || finalValidation.item.generatedIssueCount !== 0) issues.push("Processed Item should retain its 40 uploaded-row warnings.");
+  for (const finding of finalValidation.header.issues) {
+    const row = automatedHeaderRows[finding.rowNumber - 1];
+    if (finding.ccn !== workflowModule.getRecordCcn(row, automatedHeaderRows[automatedHeaderResult.headerRowIndex])) issues.push("Sorted finding CCN does not match its output Excel row.");
+    if ((finding.origin === "generated") !== automatedHeaderResult.generatedRowNumbers.includes(finding.rowNumber)) issues.push("Generated provenance did not survive sorting.");
+  }
+
+  // Alias precedence is shared by Header classification, deduplication, and Item propagation.
+  for (const alias of ["Cargo Control Number", ""]) {
+    const aliasRows = cloneRows(actualHeaderResult.rows);
+    const headerIndex = actualHeaderResult.headerRowIndex;
+    const explicitCcnIndex = aliasRows[headerIndex].indexOf("CCN");
+    aliasRows[headerIndex][explicitCcnIndex] = alias; // Empty label exercises the existing Order Number column.
+    const aliasOutput = applyBrokerageAutomation({ sourceRows: row4SourceRows, preparedHeader: { rows: aliasRows }, metadata: { client: "SF EXPRESS", reportDate: "4/28/2026" }, brokerageRates });
+    if (JSON.stringify(aliasOutput.summary) !== JSON.stringify(automatedHeaderResult.summary) || aliasOutput.insertedCount !== automatedHeaderResult.insertedCount) issues.push(`${alias || "Order Number"} alias changed classification, totals, or inserted count.`);
+    const aliasItem = workflowModule.prepareItemRowsWithCcn({ itemRows: row4ItemRows, preparedHeader: aliasOutput });
+    const aliasItemHeader = aliasItem.rows[aliasItem.headerRowIndex];
+    const itemCcnIndex = aliasItemHeader.indexOf("CCN");
+    const aliasValidation = workflowModule.validateReportRows(aliasOutput.rows, "header");
+    if (aliasValidation.issueCount !== 316 || aliasItem.unmatchedCount !== actualItemResult.unmatchedCount) issues.push(`${alias || "Order Number"} alias changed validation or Item mapping.`);
+    for (let index = aliasItem.headerRowIndex + 1; index < aliasItem.rows.length; index++) {
+      if (aliasItem.rows[index][itemCcnIndex] !== actualItemResult.rows[index][itemCcnIndex]) { issues.push(`${alias || "Order Number"} alias changed an Item CCN.`); break; }
+    }
+  }
+  const precedenceHeader = ["Transaction Number", "CCN", "Cargo Control Number", "Order Number"];
+  for (const [row, expected] of [[["TX", "CCN-A", "CARGO-B", "ORDER-C"], "CCN-A"], [["TX", " ", "CARGO-B", "ORDER-C"], "CARGO-B"], [["TX", "", "", "ORDER-C"], "ORDER-C"]]) {
+    if (workflowModule.getRecordCcn(row, precedenceHeader) !== expected) issues.push("CCN alias precedence or blank-cell fallback failed.");
+    const mapped = workflowModule.prepareItemRowsWithCcn({ headerRows: [["CLIENT:"], ["RPT NAME:"], ["RPT DATE :"], [], precedenceHeader, row], itemRows: [["CLIENT:"], ["RPT NAME:"], ["RPT DATE :"], [], ["Transaction Number", "Goods Description"], ["TX", "Item"]] });
+    if (mapped.rows[5][2] !== expected) issues.push("Item mapping did not use per-row CCN fallback.");
+  }
+
+  for (const field of ["Quantity", "Value for Duty", "Value for Tax", "Duty", "Gov. Sales Tax"]) {
+    const invalidItem = cloneRows(validationItemRows);
+    const header = invalidItem[detectHeaderRowIndex(invalidItem, "item")];
+    header[header.indexOf(field)] = "Missing field";
+    try {
+      summarizeDtOutputs({ headerRows: automatedHeaderRows, itemRows: invalidItem });
+      issues.push(`Missing Item ${field} must throw before downloads.`);
+    } catch (err) {
+      if (!String(err.message).includes(field)) issues.push(`Missing ${field} error did not identify the field.`);
+    }
   }
 
   let unknownClientResult;

@@ -703,6 +703,69 @@ input[type="checkbox"]:checked {
     font-size: 13px;
   }
 
+  .dt-validation-report {
+    margin-top: 15px;
+  }
+
+  .dt-validation-section {
+    margin-top: 14px;
+    padding: 12px;
+    background: #0f1419;
+    border-radius: 6px;
+    border-left: 3px solid #64748b;
+  }
+
+  .dt-validation-section h5 {
+    margin: 0 0 10px;
+    font-size: 14px;
+  }
+
+  .dt-validation-warning {
+    color: #fbbf24;
+  }
+
+  .dt-validation-pass {
+    color: #4ade80;
+  }
+
+  .dt-validation-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+
+  .dt-validation-table th,
+  .dt-validation-table td {
+    padding: 5px 6px;
+    border-bottom: 1px solid #263241;
+    text-align: right;
+  }
+
+  .dt-validation-table th:first-child,
+  .dt-validation-table td:first-child {
+    text-align: left;
+  }
+
+  .dt-validation-details {
+    margin-top: 10px;
+    font-size: 12px;
+  }
+
+  .dt-validation-details summary {
+    cursor: pointer;
+    color: #93c5fd;
+  }
+
+  .dt-validation-details ul {
+    margin: 8px 0 0;
+    padding-left: 18px;
+  }
+
+  .dt-validation-details li {
+    margin: 4px 0;
+    line-height: 1.35;
+  }
+
   @media (max-width: 1100px) {
     .dt-header-layout {
       grid-template-columns: 1fr;

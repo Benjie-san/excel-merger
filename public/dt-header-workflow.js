@@ -74,7 +74,7 @@
 
   function getExpectedLabelsForMode(mode) {
     if (mode === "header") {
-      return ["transaction number", "ccn"];
+      return ["transaction number"];
     }
     if (mode === "item") {
       return ["transaction number", "goods description"];
@@ -87,7 +87,7 @@
     var scanLimit = Math.min((rows || []).length, 10);
 
     for (var i = 0; i < scanLimit; i++) {
-      if (rowIncludesAll(rows[i], expectedLabels)) {
+      if (rowIncludesAll(rows[i], expectedLabels) && (mode !== "header" || resolveCcnColumnIndexes(rows[i]).length > 0)) {
         return i;
       }
     }
@@ -134,22 +134,38 @@
     return normalizeHeaderRows(clonedRows, "header");
   }
 
+  // Prefer the explicit CCN, then its long label, then Order Number, per row.
+  function resolveCcnColumnIndexes(headerRow) {
+    return ["CCN", "Cargo Control Number", "Order Number"]
+      .map(function (label) { return findColumnIndex(headerRow, label); })
+      .filter(function (index) { return index !== -1; });
+  }
+
+  function getRecordCcn(row, headerRow) {
+    var indexes = resolveCcnColumnIndexes(headerRow);
+    for (var i = 0; i < indexes.length; i++) {
+      var value = normalizeCell(row[indexes[i]]);
+      if (value) return value;
+    }
+    return "";
+  }
+
   function buildTransactionToCcnMap(headerInput) {
     var normalizedHeader = normalizePreparedHeaderInput(headerInput);
     var headerRowIndex = normalizedHeader.headerRowIndex;
     var headerRow = normalizedHeader.rows[headerRowIndex] || [];
     var transactionIndex = findColumnIndex(headerRow, "Transaction Number");
-    var ccnIndex = findColumnIndex(headerRow, "CCN");
+    var ccnIndex = resolveCcnColumnIndexes(headerRow)[0];
 
-    if (transactionIndex === -1 || ccnIndex === -1) {
-      throw new Error("Header workbook is missing Transaction Number or CCN.");
+    if (transactionIndex === -1 || ccnIndex === undefined) {
+      throw new Error("Header workbook is missing Transaction Number or CCN / Cargo Control Number / Order Number.");
     }
 
     var lookup = new Map();
     for (var r = headerRowIndex + 1; r < normalizedHeader.rows.length; r++) {
       var row = normalizedHeader.rows[r] || [];
       var transaction = normalizeCell(row[transactionIndex]);
-      var ccn = normalizeCell(row[ccnIndex]);
+      var ccn = getRecordCcn(row, headerRow);
       if (!transaction || !ccn) {
         continue;
       }
@@ -261,7 +277,7 @@
   function resolveHeaderColumns(headerRow) {
     return {
       transactionNumber: findColumnIndex(headerRow, "Transaction Number"),
-      ccn: findColumnIndex(headerRow, "CCN"),
+      ccn: resolveCcnColumnIndexes(headerRow).length ? resolveCcnColumnIndexes(headerRow)[0] : -1,
       shipmentDate: findColumnIndex(headerRow, "Shipment Date"),
       arrivalDate: findColumnIndex(headerRow, "Arrival Date"),
       releaseDate: findColumnIndex(headerRow, "Release Date"),
@@ -276,7 +292,7 @@
   function assertRequiredHeaderColumns(columns) {
     var missing = [];
     if (columns.transactionNumber === -1) missing.push("Transaction Number");
-    if (columns.ccn === -1) missing.push("CCN");
+    if (columns.ccn === -1) missing.push("CCN / Cargo Control Number / Order Number");
     if (columns.shipmentDate === -1) missing.push("Shipment Date");
     if (columns.arrivalDate === -1) missing.push("Arrival Date");
     if (columns.releaseDate === -1) missing.push("Release Date");
@@ -336,6 +352,9 @@
     var targetRows = cloneRows(preparedHeader.rows);
     var headerRowIndex = preparedHeader.headerRowIndex;
     var sourceRows = cloneRows(options && options.sourceRows);
+    var headerRow = targetRows[headerRowIndex] || [];
+    var columns = resolveHeaderColumns(headerRow);
+    assertRequiredHeaderColumns(columns);
 
     var ccnStartRowIndex = headerRowIndex + 1;
     var sourceACStartIndex = 2;
@@ -361,7 +380,7 @@
 
     for (var r = ccnStartRowIndex; r < dataTargetRows.length; r++) {
       var row = dataTargetRows[r] || [];
-      var cleaned = cleanTargetCCN(row[COL_B]);
+      var cleaned = cleanTargetCCN(getRecordCcn(row, headerRow));
       if (cleaned !== "") {
         refSet.add(cleaned);
       }
@@ -382,7 +401,6 @@
     }
 
     var lastExistingRow = lastNonEmptyIndex >= 0 ? (dataTargetRows[lastNonEmptyIndex] || []) : [];
-    var headerRow = dataTargetRows[headerRowIndex] || [];
     var targetRowLen = Math.max(headerRow.length, COL_R + 1, COL_Q + 1, COL_J + 1, 18);
     var insertedRows = [];
 
@@ -405,6 +423,7 @@
         newRow[c] = 0;
       }
       newRow[COL_R] = "DDP";
+      newRow[columns.ccn] = item.acRaw;
       insertedRows.push(newRow);
       if (item.acRaw !== "") {
         refSet.add(item.acRaw);
@@ -416,7 +435,8 @@
     return {
       rows: finalRows,
       headerRowIndex: headerRowIndex,
-      insertedCount: insertedRows.length
+      insertedCount: insertedRows.length,
+      generatedRowIndexes: insertedRows.map(function (_, index) { return insertAt + index; })
     };
   }
 
@@ -478,7 +498,7 @@
       if (isEmptyRow(row)) continue;
 
       var transaction = normalizeCell(row[columns.transactionNumber]);
-      var ccn = normalizeCell(row[columns.ccn]);
+      var ccn = getRecordCcn(row, headerRow);
       var classification = classifyHeaderRow(transaction, ccn);
       if (classification === "PGA") counts.pga++;
       if (classification === "LVS") counts.lvs++;
@@ -534,6 +554,162 @@
     };
   }
 
+  var validationFields = {
+    header: [
+      { key: "valueForDuty", label: "Value for Duty" },
+      { key: "duty", label: "Duty" },
+      { key: "gst", label: "Gov. Sales Tax" }
+    ],
+    item: [
+      { key: "quantity", label: "Quantity" },
+      { key: "valueForDuty", label: "Value for Duty" },
+      { key: "duty", label: "Duty" },
+      { key: "valueForTax", label: "Value for Tax" },
+      { key: "gst", label: "Gov. Sales Tax" }
+    ]
+  };
+
+  function resolveValidationColumns(headerRow, mode) {
+    var fields = validationFields[mode];
+    if (!fields) {
+      throw new Error('Invalid validation mode "' + mode + '". Expected "header" or "item".');
+    }
+
+    var columns = {};
+    fields.forEach(function (field) {
+      columns[field.key] = findColumnIndex(headerRow, field.label);
+    });
+    columns.transactionNumber = findColumnIndex(headerRow, "Transaction Number");
+    columns.ccn = findColumnIndex(headerRow, "CCN");
+    columns.orderNumber = findColumnIndex(headerRow, "Order Number");
+    columns.lineNumber = findColumnIndex(headerRow, "Line #");
+    if (columns.lineNumber === -1) {
+      columns.lineNumber = findColumnIndex(headerRow, "Line Number");
+    }
+    return columns;
+  }
+
+  function classifyValidationValue(value) {
+    if (normalizeCell(value) === "") {
+      return "blank";
+    }
+    // Do not let parseFloat's numeric-prefix parsing turn invalid text into zero.
+    var token = normalizeCell(value).replace(/[$,\s]/g, "");
+    if (token.charAt(0) === "(" && token.charAt(token.length - 1) === ")") token = token.slice(1, -1);
+    if (token === "-") return "zero";
+    if (token.charAt(token.length - 1) === "-") token = token.slice(0, -1);
+    if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(token)) return null;
+    var numeric = parseNumber(value);
+    return numeric === 0 ? "zero" : null;
+  }
+
+  function validationRecord(row, rowNumber, columns, mode) {
+    var transaction = columns.transactionNumber === -1
+      ? ""
+      : normalizeCell(row[columns.transactionNumber]);
+    var ccn = columns.ccn === -1 ? "" : normalizeCell(row[columns.ccn]);
+    var orderNumber = columns.orderNumber === -1 ? "" : normalizeCell(row[columns.orderNumber]);
+    var lineNumber = columns.lineNumber === -1 ? "" : normalizeCell(row[columns.lineNumber]);
+
+    return {
+      mode: mode,
+      rowNumber: rowNumber,
+      transactionNumber: transaction,
+      ccn: ccn || orderNumber,
+      orderNumber: orderNumber,
+      lineNumber: lineNumber
+    };
+  }
+
+  function validateReportRows(rows, mode, options) {
+    var normalizedRows = normalizeHeaderRows(cloneRows(rows), mode);
+    var headerRowIndex = normalizedRows.headerRowIndex;
+    var headerRow = normalizedRows.rows[headerRowIndex] || [];
+    var columns = resolveValidationColumns(headerRow, mode);
+    var fields = validationFields[mode];
+    var missing = fields
+      .filter(function (field) { return columns[field.key] === -1; })
+      .map(function (field) { return field.label; });
+
+    if (missing.length) {
+      return {
+        mode: mode,
+        headerRowIndex: headerRowIndex,
+        error: "Missing required validation columns: " + missing.join(", ") + ".",
+        missingColumns: missing,
+        rowsChecked: 0,
+        issueCount: 0,
+        rowsWithIssues: 0,
+        blankCount: 0,
+        zeroCount: 0,
+        fieldCounts: {},
+        issues: []
+      };
+    }
+
+    var fieldCounts = {};
+    fields.forEach(function (field) {
+      fieldCounts[field.label] = { blank: 0, zero: 0, total: 0 };
+    });
+
+    var issues = [];
+    var rowsWithIssues = new Set();
+    var rowsChecked = 0;
+    var blankCount = 0;
+    var zeroCount = 0;
+    var generatedIssueCount = 0;
+    var generatedRowNumbers = new Set(options && options.generatedRowNumbers || []);
+
+    for (var r = headerRowIndex + 1; r < normalizedRows.rows.length; r++) {
+      var row = normalizedRows.rows[r] || [];
+      if (isEmptyRow(row)) continue;
+      rowsChecked++;
+
+      var record = validationRecord(row, r + 1, columns, mode);
+      record.ccn = getRecordCcn(row, headerRow);
+      var origin = generatedRowNumbers.has(r + 1) ? "generated" : "uploaded";
+      fields.forEach(function (field) {
+        var status = classifyValidationValue(row[columns[field.key]]);
+        if (!status) return;
+
+        fieldCounts[field.label][status]++;
+        fieldCounts[field.label].total++;
+        if (status === "blank") blankCount++;
+        if (status === "zero") zeroCount++;
+        if (origin === "generated") generatedIssueCount++;
+        rowsWithIssues.add(r);
+        issues.push({
+          mode: record.mode,
+          origin: origin,
+          rowNumber: record.rowNumber,
+          transactionNumber: record.transactionNumber,
+          ccn: record.ccn,
+          orderNumber: record.orderNumber,
+          lineNumber: record.lineNumber,
+          field: field.label,
+          type: status,
+          value: row[columns[field.key]]
+        });
+      });
+    }
+
+    return {
+      mode: mode,
+      headerRowIndex: headerRowIndex,
+      error: null,
+      missingColumns: [],
+      rowsChecked: rowsChecked,
+      issueCount: issues.length,
+      rowsWithIssues: rowsWithIssues.size,
+      blankCount: blankCount,
+      zeroCount: zeroCount,
+      generatedIssueCount: generatedIssueCount,
+      uploadedIssueCount: issues.length - generatedIssueCount,
+      fieldCounts: fieldCounts,
+      issues: issues
+    };
+  }
+
   function applyBrokerageAutomation(options) {
     var metadata = options && options.metadata ? options.metadata : {};
     var brokerageRates = options && options.brokerageRates ? options.brokerageRates : null;
@@ -556,6 +732,8 @@
     var clientLookup = lookupClientRates(brokerageRates, metadata.client);
     var reportDate = normalizeCell(metadata.reportDate);
     var dataRows = [];
+    var generatedIndexes = new Set(insertedHeader.generatedRowIndexes || []);
+    var generatedRows = new Set();
 
     for (var r = headerRowIndex + 1; r < rows.length; r++) {
       var row = ensureRow(rows, r).slice();
@@ -566,7 +744,7 @@
       ensureCell(row, columns.releaseDate);
 
       var transaction = normalizeCell(row[columns.transactionNumber]);
-      var ccn = normalizeCell(row[columns.ccn]);
+      var ccn = getRecordCcn(row, headerRow);
       var classification = classifyHeaderRow(transaction, ccn);
 
       row[columns.shipmentDate] = reportDate;
@@ -587,6 +765,7 @@
       }
 
       dataRows.push(row);
+      if (generatedIndexes.has(r)) generatedRows.add(row);
     }
 
     dataRows = stableSortRowsByBrokerage(dataRows, columns.brokerageTotal);
@@ -597,6 +776,10 @@
       rows: finalRows,
       headerRowIndex: headerRowIndex,
       insertedCount: insertedHeader.insertedCount || 0,
+      generatedRowNumbers: dataRows.reduce(function (numbers, row, index) {
+        if (generatedRows.has(row)) numbers.push(headerRowIndex + index + 2);
+        return numbers;
+      }, []),
       summary: summary
     };
   }
@@ -610,10 +793,27 @@
       clientKey: ""
     });
     var itemSummary = itemRows ? buildItemSummary(itemRows) : null;
+    var headerValidation = validateReportRows(headerRows, "header", {
+      generatedRowNumbers: options && options.generatedHeaderRowNumbers
+    });
+    var itemValidation = itemRows ? validateReportRows(itemRows, "item") : null;
+
+    if (headerValidation.error) {
+      throw new Error("Header workbook validation failed: " + headerValidation.error);
+    }
+    if (itemValidation && itemValidation.error) {
+      throw new Error("Item workbook validation failed: " + itemValidation.error);
+    }
 
     return {
       header: headerSummary,
       item: itemSummary,
+      validation: {
+        header: headerValidation,
+        item: itemValidation,
+        totalIssues: headerValidation.issueCount + (itemValidation ? itemValidation.issueCount : 0),
+        hasIssues: headerValidation.issueCount > 0 || !!(itemValidation && itemValidation.issueCount > 0)
+      },
       compare: {
         dutyMatch: itemSummary ? Math.abs(headerSummary.totalDutyValue - itemSummary.totalDutyValue) <= 0.0001 : false,
         gstMatch: itemSummary ? Math.abs(headerSummary.totalGstValue - itemSummary.totalGstValue) <= 0.0001 : false
@@ -623,10 +823,12 @@
 
   return {
     detectHeaderRowIndex: detectHeaderRowIndex,
+    getRecordCcn: getRecordCcn,
     prepareHeaderRowsForModify: prepareHeaderRowsForModify,
     prepareItemRowsWithCcn: prepareItemRowsWithCcn,
     insertMissingHeaderRows: insertMissingHeaderRows,
     applyBrokerageAutomation: applyBrokerageAutomation,
-    summarizeDtOutputs: summarizeDtOutputs
+    summarizeDtOutputs: summarizeDtOutputs,
+    validateReportRows: validateReportRows
   };
 });

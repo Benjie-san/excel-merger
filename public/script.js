@@ -936,6 +936,72 @@ function generateTimestamp12() {
     return `Header ${formatReportNumber_MOD(headerValue)} vs Item ${formatReportNumber_MOD(itemValue)} (${matched ? "Matched" : "Not Matched"})`;
   }
 
+  function renderValidationFindings_MOD(title, validation) {
+    if (!validation) return "";
+
+    const status = validation.issueCount > 0
+      ? `<span class="dt-validation-warning">${validation.issueCount} warning(s) across ${validation.rowsWithIssues} row(s)</span>`
+      : `<span class="dt-validation-pass">No blank or zero values found</span>`;
+    const isHeader = title === "DutiesHeader";
+    const provenance = isHeader
+      ? `<p>Uploaded report rows: ${validation.uploadedIssueCount || 0} warning(s). Generated Header rows: ${validation.generatedIssueCount || 0} warning(s).</p>`
+      : `<p>Uploaded Item report rows: ${validation.uploadedIssueCount || 0} warning(s).</p>`;
+    const generatedNote = isHeader && validation.generatedIssueCount
+      ? "<p>Generated Header rows include default zero amounts added during processing. These remain listed for review; they do not necessarily indicate an upload error.</p>"
+      : "";
+    const fieldRows = Object.entries(validation.fieldCounts || {})
+      .map(([field, counts]) => `
+        <tr>
+          <td>${escapeHtml_MOD(field)}</td>
+          <td>${counts.blank}</td>
+          <td>${counts.zero}</td>
+          <td>${counts.total}</td>
+        </tr>
+      `)
+      .join("");
+
+    const issueRows = (validation.issues || [])
+      .map((issue) => {
+        const recordParts = [];
+        if (issue.ccn) recordParts.push(`CCN/Order: ${escapeHtml_MOD(issue.ccn)}`);
+        if (issue.transactionNumber) recordParts.push(`Transaction: ${escapeHtml_MOD(issue.transactionNumber)}`);
+        if (issue.lineNumber) recordParts.push(`Line: ${escapeHtml_MOD(issue.lineNumber)}`);
+        recordParts.push(issue.origin === "generated" ? "Generated Header row" : "Uploaded report row");
+        recordParts.push(`Row: ${escapeHtml_MOD(issue.rowNumber)}`);
+        const displayValue = issue.type === "blank"
+          ? "(blank)"
+          : escapeHtml_MOD(issue.value === undefined || issue.value === null ? "" : issue.value);
+        return `<li>${recordParts.join(" · ")} — <b>${escapeHtml_MOD(issue.field)}</b>: ${escapeHtml_MOD(issue.type === "blank" ? "Blank" : "Zero")} (${displayValue})</li>`;
+      })
+      .join("");
+
+    return `
+      <div class="dt-validation-section">
+        <h5>${escapeHtml_MOD(title)}: ${status}</h5>
+        ${provenance}
+        ${generatedNote}
+        <table class="dt-validation-table">
+          <thead><tr><th>Field</th><th>Blank</th><th>Zero</th><th>Total</th></tr></thead>
+          <tbody>${fieldRows}</tbody>
+        </table>
+        ${issueRows ? `<details class="dt-validation-details"><summary>Show affected records (${validation.issueCount})</summary><ul>${issueRows}</ul></details>` : ""}
+      </div>
+    `;
+  }
+
+  function renderValidationReport_MOD(validation) {
+    if (!validation) return "";
+    return `
+      <hr>
+      <div class="dt-validation-report">
+        <h4>Post-Processing Validation</h4>
+        <p><b>Overall Status:</b> ${validation.hasIssues ? `<span class="dt-validation-warning">Warnings found</span>` : `<span class="dt-validation-pass">Passed</span>`}</p>
+        ${renderValidationFindings_MOD("DutiesHeader", validation.header)}
+        ${renderValidationFindings_MOD("DutiesItem", validation.item)}
+      </div>
+    `;
+  }
+
   async function analyze8308ValueForDuty(sourceFileObj, targetFileObj) {
     try {
       const COL_AC = 28;
@@ -965,7 +1031,7 @@ function generateTimestamp12() {
       const eightThreeZeroEightEntries = [];
       for (let r = dataStartRowIndex; r < targetRows.length; r++) {
         const row = targetRows[r] || [];
-        const ccnRaw = row[COL_H];
+        const ccnRaw = workflow.getRecordCcn(row, targetRows[headerRowIndex]);
         const valueRaw = row[COL_J];
         const ccn = ccnRaw === undefined || ccnRaw === null ? "" : String(ccnRaw).trim();
         if (!ccn.startsWith("8308")) continue;
@@ -1118,6 +1184,7 @@ function generateTimestamp12() {
         `
             : ""
         }
+        ${renderValidationReport_MOD(summary.validation)}
       </div>
     `;
     reportEl.style.display = "block";
@@ -1139,18 +1206,13 @@ function generateTimestamp12() {
       brokerageRates
     });
 
-    downloadWorkbookFromRows_MOD(
-      modifiedHeader.rows,
-      buildOutputName_MOD(sourceFile.name || "updated_source.xlsx", "_DutiesHeader"),
-      buildHeaderNumericConfig_MOD(modifiedHeader.rows, modifiedHeader.headerRowIndex)
-    );
-
     let unmatchedItemCount = 0;
     let itemGenerated = false;
     let itemRowsOutput = null;
+    let preparedItemOutput = null;
     if (itemFile) {
       const itemRows = await readExcelFile_MOD(itemFile);
-      const preparedItem = workflow.prepareItemRowsWithCcn({
+      preparedItemOutput = workflow.prepareItemRowsWithCcn({
         itemRows,
         preparedHeader: {
           rows: modifiedHeader.rows,
@@ -1158,26 +1220,36 @@ function generateTimestamp12() {
         },
         metadata
       });
-      downloadWorkbookFromRows_MOD(
-        preparedItem.rows,
-        buildOutputName_MOD(sourceFile.name || "updated_source.xlsx", "_DutiesItem"),
-        buildItemNumericConfig_MOD(preparedItem.rows, preparedItem.headerRowIndex)
-      );
-      unmatchedItemCount = preparedItem.unmatchedCount;
+      unmatchedItemCount = preparedItemOutput.unmatchedCount;
       itemGenerated = true;
-      itemRowsOutput = preparedItem.rows;
+      itemRowsOutput = preparedItemOutput.rows;
     }
 
     const outputSummary = workflow.summarizeDtOutputs({
       headerRows: modifiedHeader.rows,
+      generatedHeaderRowNumbers: modifiedHeader.generatedRowNumbers,
       itemRows: itemRowsOutput
     });
+
+    downloadWorkbookFromRows_MOD(
+      modifiedHeader.rows,
+      buildOutputName_MOD(sourceFile.name || "updated_source.xlsx", "_DutiesHeader"),
+      buildHeaderNumericConfig_MOD(modifiedHeader.rows, modifiedHeader.headerRowIndex)
+    );
+    if (preparedItemOutput) {
+      downloadWorkbookFromRows_MOD(
+        preparedItemOutput.rows,
+        buildOutputName_MOD(sourceFile.name || "updated_source.xlsx", "_DutiesItem"),
+        buildItemNumericConfig_MOD(preparedItemOutput.rows, preparedItemOutput.headerRowIndex)
+      );
+    }
 
     renderModifyCompletion({
       insertedCount: modifiedHeader.insertedCount,
       header: modifiedHeader.summary,
       item: outputSummary.item,
       compare: outputSummary.compare,
+      validation: outputSummary.validation,
       clientMatched: modifiedHeader.summary.clientMatched,
       clientKey: modifiedHeader.summary.clientKey,
       itemGenerated,
