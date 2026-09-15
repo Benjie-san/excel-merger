@@ -30,6 +30,17 @@ The project currently has 3 user-facing tools:
   - DutiesHeader: converts `Value for Duty -> Exchange Rate` range (or fallback columns J..Q) to numeric General format.
   - DutiesItem: converts `Duty` and `Gov. Sales Tax` to numeric General format.
 
+## Current progress (2026-09-15)
+- D/T Header and Item post-processing validation is implemented and hardened.
+- Header validation reports blank values for all monitored fields, but zero `Duty` and `Gov. Sales Tax` findings only for LVS/PGA rows. CLVS zero Duty/GST values are expected and excluded; Header `Value for Duty` remains checked for every row.
+- The final D/T report UI is now split into `Overview`, `Header checks`, and `Item checks` tabs. Each validation tab shows its warning count, field totals, provenance/expected-zero notes, and a scrollable affected-record list. Tabs support keyboard navigation and responsive layouts.
+- Verification against `Test files/112-05240631`:
+  - Final Header findings: 36 (2 `Value for Duty` zeros and 34 `Duty` zeros).
+  - Expected CLVS zero values excluded: 282 (141 Duty + 141 GST).
+  - Final Item findings: 40 (38 Duty zeros and 2 Duty blanks); no Quantity, Value for Duty, Value for Tax, or GST findings in that fixture.
+- Verification completed locally with `node --check` for the changed JavaScript files, `git diff --check`, and `npm.cmd run test:regression` (all smoke sections passed).
+- Rollout boundary: these checks are local fixture/CLI evidence only. No packaged desktop rebuild, deployment, or authenticated production/runtime verification has been performed. Before release, restart/rebuild the app from the current working tree and manually exercise Analyze 8308 -> Proceed with Modify, including Header-only and Header+Item runs.
+
 2. D/T Header File Modifier
 - Inputs:
   - `CLIENT`
@@ -88,8 +99,9 @@ The project currently has 3 user-facing tools:
   - DutiesHeader fields: `Value for Duty`, `Duty`, and `Gov. Sales Tax`.
   - DutiesItem fields: `Quantity`, `Value for Duty`, `Duty`, `Value for Tax`, and `Gov. Sales Tax`.
   - Blank/null cells and exact numeric zero values (including formatted/accounting zero) are warnings. Tiny nonzero values are not zero. This is a blank/zero check, not a general numeric-format validator.
+  - Header `Duty` and `Gov. Sales Tax` zero warnings apply to LVS/PGA rows; CLVS rows are expected to have zero amounts in those fields and are excluded. Header `Value for Duty` remains checked for every row.
   - Findings show the output Excel row and resolved CCN; Item findings also show `Transaction Number` and `Line #`.
-  - All findings remain visible. Counts and record labels distinguish uploaded report rows from generated Header rows, which intentionally contain default zero amounts. Provenance is tracked separately through sorting and does not add workbook columns.
+  - All findings remain visible. Counts and record labels distinguish uploaded report rows from generated Header rows. Expected CLVS zero exclusions are reported separately. Provenance is tracked separately through sorting and does not add workbook columns.
   - Missing validation columns are blocking errors before either download; findings themselves do not block downloads.
 
 3. Header/Item Analyzer

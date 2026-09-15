@@ -642,6 +642,7 @@
         rowsWithIssues: 0,
         blankCount: 0,
         zeroCount: 0,
+        ignoredExpectedZeroCount: 0,
         fieldCounts: {},
         issues: []
       };
@@ -658,6 +659,7 @@
     var blankCount = 0;
     var zeroCount = 0;
     var generatedIssueCount = 0;
+    var ignoredExpectedZeroCount = 0;
     var generatedRowNumbers = new Set(options && options.generatedRowNumbers || []);
 
     for (var r = headerRowIndex + 1; r < normalizedRows.rows.length; r++) {
@@ -668,9 +670,26 @@
       var record = validationRecord(row, r + 1, columns, mode);
       record.ccn = getRecordCcn(row, headerRow);
       var origin = generatedRowNumbers.has(r + 1) ? "generated" : "uploaded";
+      var classification = mode === "header"
+        ? classifyHeaderRow(record.transactionNumber, record.ccn)
+        : "";
       fields.forEach(function (field) {
         var status = classifyValidationValue(row[columns[field.key]]);
         if (!status) return;
+
+        // CLVS records legitimately carry zero Duty and GST values. Keep the
+        // row in the output, but do not report those expected amounts as
+        // validation findings. Other Header fields, including Value for Duty,
+        // remain subject to the normal blank/zero checks.
+        if (
+          mode === "header" &&
+          status === "zero" &&
+          classification === "CLVS" &&
+          (field.key === "duty" || field.key === "gst")
+        ) {
+          ignoredExpectedZeroCount++;
+          return;
+        }
 
         fieldCounts[field.label][status]++;
         fieldCounts[field.label].total++;
@@ -704,6 +723,7 @@
       blankCount: blankCount,
       zeroCount: zeroCount,
       generatedIssueCount: generatedIssueCount,
+      ignoredExpectedZeroCount: ignoredExpectedZeroCount,
       uploadedIssueCount: issues.length - generatedIssueCount,
       fieldCounts: fieldCounts,
       issues: issues

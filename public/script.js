@@ -21,6 +21,30 @@ function showDisplay(view){
   if (apcItemTool) {
     apcItemTool.style.display = mode === "apc-item" ? "flex" : "none";
   }
+
+  // Keep the workspace chrome in sync with the visible tool. The workflow
+  // logic still uses the same view names and existing DOM IDs.
+  if (typeof navBindings !== "undefined") {
+    const activeBinding = navBindings.find(({ view: bindingView }) => bindingView === mode);
+    navBindings.forEach(({ id, view: bindingView }) => {
+      const navItem = document.getElementById(id);
+      if (!navItem) return;
+      const isActive = bindingView === mode;
+      navItem.classList.toggle("is-active", isActive);
+      if (isActive) {
+        navItem.setAttribute("aria-current", "page");
+      } else {
+        navItem.removeAttribute("aria-current");
+      }
+    });
+
+    const activeToolLabel = document.getElementById("activeToolLabel");
+    const activeNavItem = activeBinding ? document.getElementById(activeBinding.id) : null;
+    const activeLabel = activeNavItem?.querySelector(".nav-item-label")?.textContent?.trim();
+    if (activeToolLabel && activeLabel) {
+      activeToolLabel.textContent = activeLabel;
+    }
+  }
 }
 
 function downloadBlobFile(blob, fileName) {
@@ -52,6 +76,9 @@ navBindings.forEach(({ id, view }) => {
     showDisplay(view);
   });
 });
+
+// Establish the initial active state and top-bar context on first load.
+showDisplay("merger");
 
 /*******************************************************************************
  *  CLIENT-SIDE EXCEL MERGER + ANALYZER
@@ -479,6 +506,7 @@ uploadForm.addEventListener("submit", async (e) => {
           .join("")}
       </table>
   `;
+  reportDiv.innerHTML = reportDiv.innerHTML.replace(/<h3>[^<]*Report<\/h3>/, "<h3>Report</h3>");
 
   // 4. Export merged.xlsx
   exportMergedExcel(mergedData);
@@ -949,6 +977,9 @@ function generateTimestamp12() {
     const generatedNote = isHeader && validation.generatedIssueCount
       ? "<p>Generated Header rows include default zero amounts added during processing. These remain listed for review; they do not necessarily indicate an upload error.</p>"
       : "";
+    const expectedNote = isHeader && validation.ignoredExpectedZeroCount
+      ? `<p class="dt-validation-expected-note">${validation.ignoredExpectedZeroCount} expected CLVS Duty/GST zero value(s) excluded from warnings.</p>`
+      : "";
     const fieldRows = Object.entries(validation.fieldCounts || {})
       .map(([field, counts]) => `
         <tr>
@@ -980,6 +1011,7 @@ function generateTimestamp12() {
         <h5>${escapeHtml_MOD(title)}: ${status}</h5>
         ${provenance}
         ${generatedNote}
+        ${expectedNote}
         <table class="dt-validation-table">
           <thead><tr><th>Field</th><th>Blank</th><th>Zero</th><th>Total</th></tr></thead>
           <tbody>${fieldRows}</tbody>
@@ -989,17 +1021,67 @@ function generateTimestamp12() {
     `;
   }
 
-  function renderValidationReport_MOD(validation) {
+  function renderValidationTab_MOD(eyebrow, title, description, validation) {
     if (!validation) return "";
+    const tabId = title === "Header checks" ? "header" : "item";
+    const hasIssues = validation.issueCount > 0;
+    const statusText = hasIssues
+      ? `${validation.issueCount} warning(s)`
+      : "Checks clear";
     return `
-      <hr>
-      <div class="dt-validation-report">
-        <h4>Post-Processing Validation</h4>
-        <p><b>Overall Status:</b> ${validation.hasIssues ? `<span class="dt-validation-warning">Warnings found</span>` : `<span class="dt-validation-pass">Passed</span>`}</p>
-        ${renderValidationFindings_MOD("DutiesHeader", validation.header)}
-        ${renderValidationFindings_MOD("DutiesItem", validation.item)}
-      </div>
+      <section class="dt-report-panel dt-report-panel--validation" id="dt-report-panel-${tabId}" role="tabpanel" aria-labelledby="dt-report-tab-${tabId}" hidden>
+        <div class="dt-report-panel-heading">
+          <div>
+            <p class="dt-report-eyebrow">${escapeHtml_MOD(eyebrow)}</p>
+            <h3>${escapeHtml_MOD(title)}</h3>
+            <p>${escapeHtml_MOD(description)}</p>
+          </div>
+          <span class="dt-report-inline-status ${hasIssues ? "is-warning" : "is-success"}">${statusText}</span>
+        </div>
+        ${renderValidationFindings_MOD(title === "Header checks" ? "DutiesHeader" : "DutiesItem", validation)}
+      </section>
     `;
+  }
+
+  function wireReportTabs_MOD() {
+    if (!reportEl) return;
+    const tabs = Array.from(reportEl.querySelectorAll("[data-dt-report-tab]"));
+    if (!tabs.length) return;
+    const panels = tabs
+      .map((tab) => document.getElementById(tab.getAttribute("aria-controls")))
+      .filter(Boolean);
+
+    const activate = (tabId, moveFocus) => {
+      tabs.forEach((tab) => {
+        const selected = tab.dataset.dtReportTab === tabId;
+        tab.setAttribute("aria-selected", selected ? "true" : "false");
+        tab.tabIndex = selected ? 0 : -1;
+        tab.classList.toggle("is-active", selected);
+      });
+      panels.forEach((panel) => {
+        const selected = panel.id === `dt-report-panel-${tabId}`;
+        panel.hidden = !selected;
+        panel.classList.toggle("is-active", selected);
+      });
+      if (moveFocus) {
+        const activeTab = tabs.find((tab) => tab.dataset.dtReportTab === tabId);
+        if (activeTab) activeTab.focus();
+      }
+    };
+
+    tabs.forEach((tab, index) => {
+      tab.addEventListener("click", () => activate(tab.dataset.dtReportTab, false));
+      tab.addEventListener("keydown", (event) => {
+        let nextIndex = index;
+        if (event.key === "ArrowRight" || event.key === "ArrowDown") nextIndex = (index + 1) % tabs.length;
+        if (event.key === "ArrowLeft" || event.key === "ArrowUp") nextIndex = (index - 1 + tabs.length) % tabs.length;
+        if (event.key === "Home") nextIndex = 0;
+        if (event.key === "End") nextIndex = tabs.length - 1;
+        if (nextIndex === index) return;
+        event.preventDefault();
+        activate(tabs[nextIndex].dataset.dtReportTab, true);
+      });
+    });
   }
 
   async function analyze8308ValueForDuty(sourceFileObj, targetFileObj) {
@@ -1146,48 +1228,111 @@ function generateTimestamp12() {
     const header = summary.header || {};
     const item = summary.item || null;
     const compare = summary.compare || {};
+    const validation = summary.validation || {};
+    const headerValidation = validation.header || null;
+    const itemValidation = validation.item || null;
+    const totalIssues = Number(validation.totalIssues) || 0;
+    const warningLabel = totalIssues === 1 ? "review finding" : "review findings";
+    const statusLabel = totalIssues > 0 ? "Review required" : "Checks clear";
+    const statusClass = totalIssues > 0 ? "is-warning" : "is-success";
     const clientStatus = summary.clientMatched
       ? `Matched rate profile: ${escapeHtml_MOD(summary.clientKey || "CLIENT")}.`
       : "Client not found in brokerage JSON. Classified brokerage fee cells were left blank.";
     const itemStatus = summary.itemGenerated
       ? `Downloaded${summary.unmatchedItemCount > 0 ? ` with ${summary.unmatchedItemCount} unmatched transaction number(s) left blank` : ""}.`
       : "Not provided.";
+    const itemTab = itemValidation
+      ? `<button type="button" class="dt-report-tab" id="dt-report-tab-item" role="tab" aria-selected="false" aria-controls="dt-report-panel-item" data-dt-report-tab="item" tabindex="-1"><span>Item checks</span><span class="dt-report-tab-count ${itemValidation.issueCount > 0 ? "is-warning" : "is-success"}">${itemValidation.issueCount}</span></button>`
+      : "";
+    const itemPanel = itemValidation
+      ? renderValidationTab_MOD("02 / ITEM", "Item checks", "Check item-level fields before download.", itemValidation)
+      : "";
+    const dutyMatch = item && compare ? !!compare.dutyMatch : false;
+    const gstMatch = item && compare ? !!compare.gstMatch : false;
+    const matchClass = item ? (dutyMatch && gstMatch ? "is-success" : "is-warning") : "is-muted";
+    const matchLabel = item ? (dutyMatch && gstMatch ? "Matched" : "Review") : "Not available";
 
     reportEl.innerHTML = `
-      <div class="analyze-report-container">
-        <div class="analyze-report-grid header-only">
-          <div class="analyze-report-col">
-            <h4>Modify Complete</h4>
-            <p><b>DutiesHeader:</b> downloaded with ${summary.insertedCount || 0} new row(s).</p>
-            <p><b>DutiesItem:</b> ${itemStatus}</p>
-            <p><b>Brokerage Mapping:</b> ${clientStatus}</p>
-            <p><b>Blank Brokerage Fee Rows:</b> ${header.blankBrokerageCount ?? "-"}</p>
+      <div class="analyze-report-container dt-report-container">
+        <div class="dt-report-shell">
+          <header class="dt-report-header">
+            <div>
+              <p class="dt-report-eyebrow">D/T WORKFLOW / REPORT</p>
+              <h3>Files processed</h3>
+              <p class="dt-report-subtitle">Review totals and flagged rows before downloading the files.</p>
+            </div>
+            <div class="dt-report-status ${statusClass}">
+              <span class="dt-report-status-dot" aria-hidden="true"></span>
+              <span><b>${statusLabel}</b><small>${totalIssues} ${warningLabel}</small></span>
+            </div>
+          </header>
+
+          <div class="dt-report-tabs" role="tablist" aria-label="D/T report sections">
+            <button type="button" class="dt-report-tab is-active" id="dt-report-tab-summary" role="tab" aria-selected="true" aria-controls="dt-report-panel-summary" data-dt-report-tab="summary" tabindex="0"><span>Overview</span><span class="dt-report-tab-count is-neutral">01</span></button>
+            <button type="button" class="dt-report-tab" id="dt-report-tab-header" role="tab" aria-selected="false" aria-controls="dt-report-panel-header" data-dt-report-tab="header" tabindex="-1"><span>Header checks</span><span class="dt-report-tab-count ${headerValidation && headerValidation.issueCount > 0 ? "is-warning" : "is-success"}">${headerValidation ? headerValidation.issueCount : 0}</span></button>
+            ${itemTab}
           </div>
-          <div class="analyze-report-col">
-            <h4>Header Totals</h4>
-            <p><b>Total PGA:</b> ${(header.counts && header.counts.pga) ?? "-"}</p>
-            <p><b>Total LVS:</b> ${(header.counts && header.counts.lvs) ?? "-"}</p>
-            <p><b>Total CLVS:</b> ${(header.counts && header.counts.clvs) ?? "-"}</p>
-            <p><b>Total Duty:</b> ${formatReportNumber_MOD(header.totalDutyValue)}</p>
-            <p><b>Total GST:</b> ${formatReportNumber_MOD(header.totalGstValue)}</p>
-          </div>
+
+          <section class="dt-report-panel is-active" id="dt-report-panel-summary" role="tabpanel" aria-labelledby="dt-report-tab-summary">
+            <div class="dt-report-kpi-grid">
+              <article class="dt-report-kpi-card dt-report-kpi-card--accent">
+                <p>Header rows added</p>
+                <strong>${summary.insertedCount || 0}</strong>
+                <span>new rows in the final output</span>
+              </article>
+              <article class="dt-report-kpi-card">
+                <p>Brokerage mix</p>
+                <strong>${(header.counts && header.counts.pga) ?? "-"} <small>/</small> ${(header.counts && header.counts.lvs) ?? "-"} <small>/</small> ${(header.counts && header.counts.clvs) ?? "-"}</strong>
+                <span>PGA / LVS / CLVS rows</span>
+              </article>
+              <article class="dt-report-kpi-card">
+                <p>Header duty</p>
+                <strong>${formatReportNumber_MOD(header.totalDutyValue)}</strong>
+                <span>final calculated total</span>
+              </article>
+              <article class="dt-report-kpi-card ${statusClass}">
+                <p>Validation findings</p>
+                <strong>${totalIssues}</strong>
+                <span>${totalIssues > 0 ? "items to review" : "no blank or zero values"}</span>
+              </article>
+            </div>
+
+            <div class="dt-report-summary-grid">
+              <article class="dt-report-card">
+                <div class="dt-report-card-heading">
+                  <div><p class="dt-report-eyebrow">FILES</p><h4>Output status</h4></div>
+                  <span class="dt-report-card-icon" aria-hidden="true">↗</span>
+                </div>
+                <dl class="dt-report-detail-list">
+                  <div><dt>DutiesHeader</dt><dd>Downloaded with ${summary.insertedCount || 0} new row(s)</dd></div>
+                  <div><dt>DutiesItem</dt><dd>${itemStatus}</dd></div>
+                  <div><dt>Brokerage mapping</dt><dd>${clientStatus}</dd></div>
+                  <div><dt>Blank brokerage rows</dt><dd>${header.blankBrokerageCount ?? "-"}</dd></div>
+                </dl>
+              </article>
+
+              <article class="dt-report-card">
+                <div class="dt-report-card-heading">
+                  <div><p class="dt-report-eyebrow">TOTALS</p><h4>Header vs Item</h4></div>
+                  <span class="dt-report-chip ${matchClass}">${matchLabel}</span>
+                </div>
+                ${item
+                  ? `<div class="dt-report-check-list">
+                      <div><span>Duty</span><strong>${describeTotalsMatch_MOD("Duty", header.totalDutyValue, item.totalDutyValue, dutyMatch)}</strong></div>
+                      <div><span>GST</span><strong>${describeTotalsMatch_MOD("GST", header.totalGstValue, item.totalGstValue, gstMatch)}</strong></div>
+                    </div>`
+                  : `<div class="dt-report-empty-state"><span class="dt-report-empty-icon" aria-hidden="true">—</span><p>No DutiesItem file was provided for comparison.</p></div>`}
+              </article>
+            </div>
+          </section>
+
+          ${renderValidationTab_MOD("01 / HEADER", "Header checks", "Blank values and non-expected zeros in the final DutiesHeader output.", headerValidation)}
+          ${itemPanel}
         </div>
-        ${
-          summary.itemGenerated && item
-            ? `
-        <hr>
-        <div class="analyze-report-compare">
-          <h4>Header vs Item Totals</h4>
-          <p><b>Duty Totals:</b> ${describeTotalsMatch_MOD("Duty", header.totalDutyValue, item.totalDutyValue, !!compare.dutyMatch)}</p>
-          <p><b>GST Totals:</b> ${describeTotalsMatch_MOD("GST", header.totalGstValue, item.totalGstValue, !!compare.gstMatch)}</p>
-        </div>
-        `
-            : ""
-        }
-        ${renderValidationReport_MOD(summary.validation)}
       </div>
     `;
     reportEl.style.display = "block";
+    wireReportTabs_MOD();
   }
 
   async function runModifyWorkflow_MOD() {

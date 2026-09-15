@@ -773,6 +773,26 @@ function runDtHeaderWorkflowRegression(rootDir) {
     }
   }
 
+  const clvsExpectedZeroRows = [
+    ["CLIENT:", "TEST"],
+    ["RPT NAME:", "TEST REPORT"],
+    ["RPT DATE :", "05/27/2026"],
+    ["Transaction Number", "CCN", "Value for Duty", "Duty", "Gov. Sales Tax"],
+    ["CLVS", "CLVS-1", "0.00", "0.00", "0.00"],
+    ["LV-1", "LV-CCN-1", "0.00", "0.00", "0.00"]
+  ];
+  const clvsExpectedZeroValidation = workflowModule.validateReportRows(clvsExpectedZeroRows, "header");
+  if (
+    clvsExpectedZeroValidation.error ||
+    clvsExpectedZeroValidation.issueCount !== 4 ||
+    clvsExpectedZeroValidation.ignoredExpectedZeroCount !== 2 ||
+    clvsExpectedZeroValidation.fieldCounts["Value for Duty"]?.zero !== 2 ||
+    clvsExpectedZeroValidation.fieldCounts.Duty?.zero !== 1 ||
+    clvsExpectedZeroValidation.fieldCounts["Gov. Sales Tax"]?.zero !== 1
+  ) {
+    issues.push(`CLVS Duty/GST zero exemptions should preserve Value for Duty checks: ${JSON.stringify(clvsExpectedZeroValidation)}`);
+  }
+
   const validationItemRows = [
     ["CLIENT:", "TEST"],
     ["RPT NAME:", "TEST REPORT"],
@@ -833,8 +853,14 @@ function runDtHeaderWorkflowRegression(rootDir) {
   // Real supplied uploads and their final transformed outputs retain every warning.
   const rawHeaderValidation = workflowModule.validateReportRows(row4HeaderRows, "header");
   const rawItemValidation = workflowModule.validateReportRows(row4ItemRows, "item");
-  if (rawHeaderValidation.zeroCount !== 34 || rawHeaderValidation.blankCount !== 0 || rawHeaderValidation.rowsChecked !== 74) {
-    issues.push("Supplied raw Header should contain 74 rows with exactly 34 Duty zeros.");
+  if (
+    rawHeaderValidation.zeroCount !== 36 ||
+    rawHeaderValidation.blankCount !== 0 ||
+    rawHeaderValidation.rowsChecked !== 74 ||
+    rawHeaderValidation.fieldCounts["Duty"]?.zero !== 34 ||
+    rawHeaderValidation.fieldCounts["Value for Duty"]?.zero !== 2
+  ) {
+    issues.push("Supplied raw Header should contain 74 rows with 34 Duty zeros and 2 Value for Duty zeros.");
   }
   if (rawItemValidation.zeroCount !== 38 || rawItemValidation.blankCount !== 2 || rawItemValidation.rowsChecked !== 116) {
     issues.push("Supplied raw Item should contain 116 rows with 38 Duty zeros and 2 Duty blanks.");
@@ -844,8 +870,13 @@ function runDtHeaderWorkflowRegression(rootDir) {
     itemRows: actualItemResult.rows,
     generatedHeaderRowNumbers: automatedHeaderResult.generatedRowNumbers
   }).validation;
-  if (finalValidation.header.issueCount !== 316 || finalValidation.header.uploadedIssueCount !== 34 || finalValidation.header.generatedIssueCount !== 282) {
-    issues.push(`Processed Header warning provenance mismatch: ${JSON.stringify({ total: finalValidation.header.issueCount, uploaded: finalValidation.header.uploadedIssueCount, generated: finalValidation.header.generatedIssueCount })}`);
+  if (
+    finalValidation.header.issueCount !== 36 ||
+    finalValidation.header.uploadedIssueCount !== 36 ||
+    finalValidation.header.generatedIssueCount !== 0 ||
+    finalValidation.header.ignoredExpectedZeroCount !== 282
+  ) {
+    issues.push(`Processed Header warning provenance mismatch: ${JSON.stringify({ total: finalValidation.header.issueCount, uploaded: finalValidation.header.uploadedIssueCount, generated: finalValidation.header.generatedIssueCount, expectedExcluded: finalValidation.header.ignoredExpectedZeroCount })}`);
   }
   if (finalValidation.item.issueCount !== 40 || finalValidation.item.generatedIssueCount !== 0) issues.push("Processed Item should retain its 40 uploaded-row warnings.");
   for (const finding of finalValidation.header.issues) {
@@ -866,7 +897,7 @@ function runDtHeaderWorkflowRegression(rootDir) {
     const aliasItemHeader = aliasItem.rows[aliasItem.headerRowIndex];
     const itemCcnIndex = aliasItemHeader.indexOf("CCN");
     const aliasValidation = workflowModule.validateReportRows(aliasOutput.rows, "header");
-    if (aliasValidation.issueCount !== 316 || aliasItem.unmatchedCount !== actualItemResult.unmatchedCount) issues.push(`${alias || "Order Number"} alias changed validation or Item mapping.`);
+    if (aliasValidation.issueCount !== 36 || aliasItem.unmatchedCount !== actualItemResult.unmatchedCount) issues.push(`${alias || "Order Number"} alias changed validation or Item mapping.`);
     for (let index = aliasItem.headerRowIndex + 1; index < aliasItem.rows.length; index++) {
       if (aliasItem.rows[index][itemCcnIndex] !== actualItemResult.rows[index][itemCcnIndex]) { issues.push(`${alias || "Order Number"} alias changed an Item CCN.`); break; }
     }

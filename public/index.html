@@ -18,26 +18,68 @@
   <script src="vendor/xlsx.full.min.js"></script>
 </head>
 <body>
-  <h2>ACB CUSTOMS BILLING</h2>
+  <div class="app-shell">
+    <aside class="side-bar" aria-label="Customs billing tools">
+      <div class="side-bar-brand">
+        <div class="side-bar-mark">
+          <img height="46" width="46" src="./assets/acb-white.png" alt="" />
+        </div>
+        <div>
+          <p class="side-bar-kicker">ACB / BILLING</p>
+          <p class="side-bar-title">Tool index</p>
+        </div>
+      </div>
 
-  <div class="side-bar">
+      <nav class="side-bar-nav" aria-label="Billing workflows">
+        <p class="side-bar-section-label">Tools</p>
+        <button type="button" class="nav-item is-active" id="link-merger" data-view="merger" aria-current="page">
+          <i class="bi bi-grid-1x2-fill" aria-hidden="true"></i>
+          <span class="nav-item-label">Excel Merger</span>
+          <span class="nav-item-index">01</span>
+        </button>
+        <button type="button" class="nav-item" id="link-modifier" data-view="modify">
+          <i class="bi bi-arrow-left-right" aria-hidden="true"></i>
+          <span class="nav-item-label">D/T Header + Item</span>
+          <span class="nav-item-index">02</span>
+        </button>
+        <button type="button" class="nav-item" id="link-analyzer" data-view="analyzer">
+          <i class="bi bi-search" aria-hidden="true"></i>
+          <span class="nav-item-label">Header + Item Analyzer</span>
+          <span class="nav-item-index">03</span>
+        </button>
+        <button type="button" class="nav-item" id="link-candata" data-view="candata">
+          <i class="bi bi-layout-text-sidebar-reverse" aria-hidden="true"></i>
+          <span class="nav-item-label">Candata → GETS</span>
+          <span class="nav-item-index">04</span>
+        </button>
+        <button type="button" class="nav-item" id="link-apc-item" data-view="apc-item">
+          <i class="bi bi-file-earmark-spreadsheet-fill" aria-hidden="true"></i>
+          <span class="nav-item-label">APC D/T Item</span>
+          <span class="nav-item-index">05</span>
+        </button>
+      </nav>
 
-    <img height="80" width="80" src="./assets/acb-white.png" alt="Customs Billing Portal logo" />
-    <hr>
-    <a id="link-merger">Excel Merger</a>
-    <hr>
-    <a id="link-modifier">D/T Header and Item Report</a>
-    <hr>
-    <a id="link-analyzer">Header/Item Analyzer</a>
-    <hr>
-    <a id="link-candata">Candata to Gets Format</a>
-    <hr>
-    <a id="link-apc-item">APC D/T Item File</a>
-    <hr>
+      <div class="side-bar-footer">
+        <span class="workspace-status"><span class="workspace-status-dot" aria-hidden="true"></span> Ready</span>
+        <small>Local file processing</small>
+      </div>
+    </aside>
 
-  </div>
+    <div class="app-main">
+      <header class="app-topbar">
+        <div>
+          <p class="app-topbar-kicker">ACB CUSTOMS BILLING</p>
+          <h1>Customs billing tools</h1>
+        </div>
+        <div class="app-topbar-context">
+          <span class="topbar-context-dot" aria-hidden="true"></span>
+          <span id="activeToolLabel">Excel Merger</span>
+          <span class="topbar-context-separator" aria-hidden="true"></span>
+          <span>Local processing</span>
+        </div>
+      </header>
 
-  <main>
+      <main>
 
 
     <div id="excel-merger">
@@ -46,8 +88,8 @@
         <div class="merger-layout">
           <div class="merger-main">
             <div id="dropZone">
-              <i id="upload-icon" class="bi bi-file-earmark-arrow-up-fill"></i>
-              <p> Drag & Drop Excel files here<br>or <br>click below to select</p>
+              <i class="upload-icon bi bi-file-earmark-arrow-up-fill" aria-hidden="true"></i>
+              <p>Drop XLSX files here or choose them below.</p>
               <label for="files" class="custom-file-upload-label">Choose Files</label>
               <input class="custom-file-upload" type="file" name="files" id="files" multiple accept=".xlsx">
               <span id="fileCount">No files selected</span>
@@ -108,7 +150,7 @@
     <div id="modifyTool" class="tool-section">
       <form id="modifyForm">
         <h2>D/T Header and Item Report</h2>
-        <p class="sub"> Drag and Drop SFTP and _DutiesHeader File to process data </p>
+        <p class="sub">Upload the SFTP file, DutiesHeader file, and optional DutiesItem file.</p>
 
         <div class="dt-header-layout">
           <div class="dt-header-main">
@@ -129,27 +171,24 @@
 
             <!-- DROP ZONE FOR SOURCE FILE -->
             <div id="sourceDropZone" class="drop-area">
-              <i id="upload-icon" class="bi bi-file-earmark-arrow-up-fill"></i>
-              <p>Drag & Drop SFTP File Here</p>
-              <p>or click to select</p>
+              <i class="upload-icon bi bi-file-earmark-arrow-up-fill" aria-hidden="true"></i>
+              <p>Drop the SFTP file here or choose a file.</p>
               <input type="file" id="sourceFileInput" accept=".xlsx" hidden />
             </div>
             <p id="sourceFileName" class="filename"></p>
 
             <!-- DROP ZONE FOR TARGET FILE -->
             <div id="targetDropZone" class="drop-area">
-              <i id="upload-icon" class="bi bi-file-earmark-arrow-up-fill"></i>
-              <p>Drag & Drop Duties Header Here</p>
-              <p>or click to select</p>
+              <i class="upload-icon bi bi-file-earmark-arrow-up-fill" aria-hidden="true"></i>
+              <p>Drop the DutiesHeader file here or choose a file.</p>
               <input type="file" id="targetFileInput" accept=".xlsx" hidden />
             </div>
             <p id="targetFileName" class="filename"></p>
 
             <!-- OPTIONAL DROP ZONE FOR DUTIES ITEM FILE -->
             <div id="modifyItemDropZone" class="drop-area">
-              <i id="upload-icon" class="bi bi-file-earmark-arrow-up-fill"></i>
-              <p>Drag & Drop Duties Item Here (Optional)</p>
-              <p>or click to select</p>
+              <i class="upload-icon bi bi-file-earmark-arrow-up-fill" aria-hidden="true"></i>
+              <p>Drop the optional DutiesItem file here or choose a file.</p>
               <input type="file" id="modifyItemFileInput" accept=".xlsx" hidden />
             </div>
             <p id="modifyItemFileName" class="filename"></p>
@@ -184,24 +223,22 @@
     <div id="analyzerTool" class="tool-section">
       <form id="analyzerForm">
         <h2>Header/Item Analyzer</h2>
-        <p class="sub"> Drag and Drop DutiesHeader file (DutiesItem optional) to analyze data </p>
+        <p class="sub">Check DutiesHeader values, with an optional DutiesItem report.</p>
 
         <div class="analyzer-layout">
           <div class="analyzer-main">
             <!-- DROP ZONE FOR HEADER FILE -->
             <div id="headerDropZone" class="drop-area">
-              <i id="upload-icon" class="bi bi-file-earmark-arrow-up-fill"></i>
-              <p>Drag & Drop DutiesHeader Here</p>
-              <p>or click to select</p>
+              <i class="upload-icon bi bi-file-earmark-arrow-up-fill" aria-hidden="true"></i>
+              <p>Drop the DutiesHeader file here or choose a file.</p>
               <input type="file" id="headerFileInput" accept=".xlsx" hidden />
             </div>
             <p id="headerFileName" class="filename"></p>
 
             <!-- DROP ZONE FOR ITEM FILE -->
             <div id="itemDropZone" class="drop-area">
-              <i id="upload-icon" class="bi bi-file-earmark-arrow-up-fill"></i>
-              <p>Drag & Drop DutiesItem Here</p>
-              <p>or click to select</p>
+              <i class="upload-icon bi bi-file-earmark-arrow-up-fill" aria-hidden="true"></i>
+              <p>Drop the optional DutiesItem file here or choose a file.</p>
               <input type="file" id="itemFileInput" accept=".xlsx" hidden />
             </div>
             <p id="itemFileName" class="filename"></p>
@@ -235,24 +272,22 @@
     <div id="candataTool" class="tool-section">
       <form id="candataForm">
         <h2>Candata to Gets Format</h2>
-        <p class="sub"> Drag and Drop DutiesHeader and Candata Item files to prepare conversion </p>
+        <p class="sub">Upload DutiesHeader and Candata Item files for GETS conversion.</p>
 
         <div class="analyzer-layout">
           <div class="analyzer-main">
             <!-- DROP ZONE FOR DUTIES HEADER FILE -->
             <div id="candataHeaderDropZone" class="drop-area">
-              <i id="upload-icon" class="bi bi-file-earmark-arrow-up-fill"></i>
-              <p>Drag & Drop Candata Duties Header Here</p>
-              <p>or click to select</p>
+              <i class="upload-icon bi bi-file-earmark-arrow-up-fill" aria-hidden="true"></i>
+              <p>Drop the Candata DutiesHeader file here or choose a file.</p>
               <input type="file" id="candataHeaderFileInput" accept=".xlsx" hidden />
             </div>
             <p id="candataHeaderFileName" class="filename"></p>
 
             <!-- DROP ZONE FOR CANDATA ITEM FILE -->
             <div id="candataItemDropZone" class="drop-area">
-              <i id="upload-icon" class="bi bi-file-earmark-arrow-up-fill"></i>
-              <p>Drag & Drop Candata Duties Item Here</p>
-              <p>or click to select</p>
+              <i class="upload-icon bi bi-file-earmark-arrow-up-fill" aria-hidden="true"></i>
+              <p>Drop the Candata DutiesItem file here or choose a file.</p>
               <input type="file" id="candataItemFileInput" accept=".xlsx" hidden />
             </div>
             <p id="candataItemFileName" class="filename"></p>
@@ -285,20 +320,18 @@
     <div id="apcItemTool" class="tool-section">
       <form id="apcItemForm">
         <h2>APC D/T Item File</h2>
-        <p class="sub"> Drag and Drop SFTP and _DutiesItem File to process data </p>
+        <p class="sub">Upload the SFTP and DutiesItem files.</p>
 
         <div id="apcSourceDropZone" class="drop-area">
-          <i id="upload-icon" class="bi bi-file-earmark-arrow-up-fill"></i>
-          <p>Drag & Drop SFTP File Here</p>
-          <p>or click to select</p>
+          <i class="upload-icon bi bi-file-earmark-arrow-up-fill" aria-hidden="true"></i>
+          <p>Drop the SFTP file here or choose a file.</p>
           <input type="file" id="apcSourceFileInput" accept=".xlsx" hidden />
         </div>
         <p id="apcSourceFileName" class="filename"></p>
 
         <div id="apcItemDropZone" class="drop-area">
-          <i id="upload-icon" class="bi bi-file-earmark-arrow-up-fill"></i>
-          <p>Drag & Drop Duties Item Here</p>
-          <p>or click to select</p>
+          <i class="upload-icon bi bi-file-earmark-arrow-up-fill" aria-hidden="true"></i>
+          <p>Drop the DutiesItem file here or choose a file.</p>
           <input type="file" id="apcItemFileInput" accept=".xlsx" hidden />
         </div>
         <p id="apcItemFileName" class="filename"></p>
@@ -317,7 +350,9 @@
         </div>
       </form>
     </div>
-  </main>
+      </main>
+    </div>
+  </div>
 
 
   <button id="scrollTopBtn" type="button" aria-label="Scroll to top">↑</button>
