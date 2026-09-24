@@ -122,6 +122,14 @@
     return -1;
   }
 
+  function findColumnIndexAny(headerRow, expectedLabels) {
+    for (var i = 0; i < expectedLabels.length; i++) {
+      var index = findColumnIndex(headerRow, expectedLabels[i]);
+      if (index !== -1) return index;
+    }
+    return -1;
+  }
+
   function normalizePreparedHeaderInput(headerInput) {
     if (headerInput && Array.isArray(headerInput.rows)) {
       return {
@@ -278,14 +286,24 @@
     return {
       transactionNumber: findColumnIndex(headerRow, "Transaction Number"),
       ccn: resolveCcnColumnIndexes(headerRow).length ? resolveCcnColumnIndexes(headerRow)[0] : -1,
+      port: findColumnIndexAny(headerRow, ["Port #", "Port Number"]),
       shipmentDate: findColumnIndex(headerRow, "Shipment Date"),
       arrivalDate: findColumnIndex(headerRow, "Arrival Date"),
       releaseDate: findColumnIndex(headerRow, "Release Date"),
+      orderNumber: findColumnIndex(headerRow, "Order Number"),
       valueForDuty: findColumnIndex(headerRow, "Value for Duty"),
       duty: findColumnIndex(headerRow, "Duty"),
-      gst: findColumnIndex(headerRow, "Gov. Sales Tax"),
+      gst: findColumnIndexAny(headerRow, ["Gov. Sales Tax", "GST"]),
+      hst: findColumnIndex(headerRow, "HST"),
+      pst: findColumnIndex(headerRow, "PST"),
+      sima: findColumnIndex(headerRow, "SIMA"),
+      surtax: findColumnIndex(headerRow, "Surtax"),
       brokerageTotal: findColumnIndex(headerRow, "Brokerage Total"),
-      exchangeRate: findColumnIndex(headerRow, "Exchange Rate")
+      additionalChargesTotal: findColumnIndex(headerRow, "Addl. Charges Total"),
+      assessmentTotal: findColumnIndex(headerRow, "Assessment Total"),
+      exciseTaxTotal: findColumnIndex(headerRow, "Excise Tax Total"),
+      exchangeRate: findColumnIndex(headerRow, "Exchange Rate"),
+      incoTerms: findColumnIndex(headerRow, "Inco Terms")
     };
   }
 
@@ -298,7 +316,7 @@
     if (columns.releaseDate === -1) missing.push("Release Date");
     if (columns.valueForDuty === -1) missing.push("Value for Duty");
     if (columns.duty === -1) missing.push("Duty");
-    if (columns.gst === -1) missing.push("Gov. Sales Tax");
+    if (columns.gst === -1) missing.push("GST / Gov. Sales Tax");
     if (columns.brokerageTotal === -1) missing.push("Brokerage Total");
     if (columns.exchangeRate === -1) missing.push("Exchange Rate");
     if (missing.length) {
@@ -362,17 +380,6 @@
 
     var COL_AC = 28;
     var COL_AS = 44;
-    var COL_A = 0;
-    var COL_B = 1;
-    var COL_C = 2;
-    var COL_D = 3;
-    var COL_E = 4;
-    var COL_F = 5;
-    var COL_H = 7;
-    var COL_J = 9;
-    var COL_K = 10;
-    var COL_Q = 16;
-    var COL_R = 17;
 
     var lastNonEmptyIndex = findLastNonEmptyRow(targetRows);
     var dataTargetRows = lastNonEmptyIndex >= 0 ? targetRows.slice(0, lastNonEmptyIndex + 1) : targetRows.slice();
@@ -401,7 +408,7 @@
     }
 
     var lastExistingRow = lastNonEmptyIndex >= 0 ? (dataTargetRows[lastNonEmptyIndex] || []) : [];
-    var targetRowLen = Math.max(headerRow.length, COL_R + 1, COL_Q + 1, COL_J + 1, 18);
+    var targetRowLen = headerRow.length;
     var insertedRows = [];
 
     for (var i = 0; i < sourceItems.length; i++) {
@@ -411,19 +418,29 @@
       }
 
       var newRow = new Array(targetRowLen).fill("");
-      newRow[COL_A] = "CLVS";
-      newRow[COL_B] = item.acRaw;
-      newRow[COL_C] = lastExistingRow[COL_C] || "";
-      newRow[COL_D] = lastExistingRow[COL_D] || "";
-      newRow[COL_E] = lastExistingRow[COL_E] || "";
-      newRow[COL_F] = lastExistingRow[COL_F] || "";
-      newRow[COL_H] = item.acRaw;
-      newRow[COL_J] = item.asRaw;
-      for (var c = COL_K; c <= COL_Q; c++) {
-        newRow[c] = 0;
-      }
-      newRow[COL_R] = "DDP";
+      newRow[columns.transactionNumber] = "CLVS";
       newRow[columns.ccn] = item.acRaw;
+      if (columns.port !== -1) newRow[columns.port] = lastExistingRow[columns.port] || "";
+      newRow[columns.shipmentDate] = lastExistingRow[columns.shipmentDate] || "";
+      newRow[columns.arrivalDate] = lastExistingRow[columns.arrivalDate] || "";
+      newRow[columns.releaseDate] = lastExistingRow[columns.releaseDate] || "";
+      if (columns.orderNumber !== -1) newRow[columns.orderNumber] = item.acRaw;
+      newRow[columns.valueForDuty] = item.asRaw;
+      [
+        columns.duty,
+        columns.gst,
+        columns.hst,
+        columns.pst,
+        columns.sima,
+        columns.surtax,
+        columns.additionalChargesTotal,
+        columns.assessmentTotal,
+        columns.exciseTaxTotal,
+        columns.exchangeRate
+      ].forEach(function (index) {
+        if (index !== -1) newRow[index] = 0;
+      });
+      if (columns.incoTerms !== -1) newRow[columns.incoTerms] = "DDP";
       insertedRows.push(newRow);
       if (item.acRaw !== "") {
         refSet.add(item.acRaw);
@@ -492,6 +509,13 @@
     var blankBrokerageCount = 0;
     var totalDutyValue = 0;
     var totalGstValue = 0;
+    var additionalTaxTotals = { hst: 0, pst: 0, sima: 0, surtax: 0 };
+    var additionalTaxColumns = {
+      hst: columns.hst !== -1,
+      pst: columns.pst !== -1,
+      sima: columns.sima !== -1,
+      surtax: columns.surtax !== -1
+    };
 
     for (var r = headerRowIndex + 1; r < rows.length; r++) {
       var row = rows[r] || [];
@@ -512,6 +536,11 @@
       var gstValue = parseNumber(row[columns.gst]);
       if (dutyValue !== null) totalDutyValue += dutyValue;
       if (gstValue !== null) totalGstValue += gstValue;
+      Object.keys(additionalTaxTotals).forEach(function (key) {
+        if (!additionalTaxColumns[key]) return;
+        var value = parseNumber(row[columns[key]]);
+        if (value !== null) additionalTaxTotals[key] += value;
+      });
     }
 
     return {
@@ -520,7 +549,12 @@
       counts: counts,
       blankBrokerageCount: blankBrokerageCount,
       totalDutyValue: roundToDisplay(totalDutyValue),
-      totalGstValue: roundToDisplay(totalGstValue)
+      totalGstValue: roundToDisplay(totalGstValue),
+      additionalTaxColumns: additionalTaxColumns,
+      totalHstValue: roundToDisplay(additionalTaxTotals.hst),
+      totalPstValue: roundToDisplay(additionalTaxTotals.pst),
+      totalSimaValue: roundToDisplay(additionalTaxTotals.sima),
+      totalSurtaxValue: roundToDisplay(additionalTaxTotals.surtax)
     };
   }
 
@@ -529,14 +563,21 @@
     var headerRowIndex = normalizedRows.headerRowIndex;
     var headerRow = normalizedRows.rows[headerRowIndex] || [];
     var dutyIndex = findColumnIndex(headerRow, "Duty");
-    var gstIndex = findColumnIndex(headerRow, "Gov. Sales Tax");
+    var gstIndex = findColumnIndexAny(headerRow, ["Gov. Sales Tax", "GST"]);
+    var additionalTaxIndexes = {
+      hst: findColumnIndex(headerRow, "HST"),
+      pst: findColumnIndex(headerRow, "PST"),
+      sima: findColumnIndex(headerRow, "SIMA"),
+      surtax: findColumnIndex(headerRow, "Surtax")
+    };
 
     if (dutyIndex === -1 || gstIndex === -1) {
-      throw new Error("Item workbook is missing Duty or Gov. Sales Tax.");
+      throw new Error("Item workbook is missing Duty or GST / Gov. Sales Tax.");
     }
 
     var totalDutyValue = 0;
     var totalGstValue = 0;
+    var additionalTaxTotals = { hst: 0, pst: 0, sima: 0, surtax: 0 };
 
     for (var r = headerRowIndex + 1; r < normalizedRows.rows.length; r++) {
       var row = normalizedRows.rows[r] || [];
@@ -546,11 +587,26 @@
       var gstValue = parseNumber(row[gstIndex]);
       if (dutyValue !== null) totalDutyValue += dutyValue;
       if (gstValue !== null) totalGstValue += gstValue;
+      Object.keys(additionalTaxTotals).forEach(function (key) {
+        if (additionalTaxIndexes[key] === -1) return;
+        var value = parseNumber(row[additionalTaxIndexes[key]]);
+        if (value !== null) additionalTaxTotals[key] += value;
+      });
     }
 
     return {
       totalDutyValue: roundToDisplay(totalDutyValue),
-      totalGstValue: roundToDisplay(totalGstValue)
+      totalGstValue: roundToDisplay(totalGstValue),
+      additionalTaxColumns: {
+        hst: additionalTaxIndexes.hst !== -1,
+        pst: additionalTaxIndexes.pst !== -1,
+        sima: additionalTaxIndexes.sima !== -1,
+        surtax: additionalTaxIndexes.surtax !== -1
+      },
+      totalHstValue: roundToDisplay(additionalTaxTotals.hst),
+      totalPstValue: roundToDisplay(additionalTaxTotals.pst),
+      totalSimaValue: roundToDisplay(additionalTaxTotals.sima),
+      totalSurtaxValue: roundToDisplay(additionalTaxTotals.surtax)
     };
   }
 
@@ -558,14 +614,22 @@
     header: [
       { key: "valueForDuty", label: "Value for Duty" },
       { key: "duty", label: "Duty" },
-      { key: "gst", label: "Gov. Sales Tax" }
+      { key: "gst", label: "Gov. Sales Tax", aliases: ["Gov. Sales Tax", "GST"] },
+      { key: "hst", label: "HST", optional: true },
+      { key: "pst", label: "PST", optional: true },
+      { key: "sima", label: "SIMA", optional: true },
+      { key: "surtax", label: "Surtax", optional: true }
     ],
     item: [
       { key: "quantity", label: "Quantity" },
       { key: "valueForDuty", label: "Value for Duty" },
       { key: "duty", label: "Duty" },
       { key: "valueForTax", label: "Value for Tax" },
-      { key: "gst", label: "Gov. Sales Tax" }
+      { key: "gst", label: "Gov. Sales Tax", aliases: ["Gov. Sales Tax", "GST"] },
+      { key: "hst", label: "HST", optional: true },
+      { key: "pst", label: "PST", optional: true },
+      { key: "sima", label: "SIMA", optional: true },
+      { key: "surtax", label: "Surtax", optional: true }
     ]
   };
 
@@ -577,7 +641,7 @@
 
     var columns = {};
     fields.forEach(function (field) {
-      columns[field.key] = findColumnIndex(headerRow, field.label);
+      columns[field.key] = findColumnIndexAny(headerRow, field.aliases || [field.label]);
     });
     columns.transactionNumber = findColumnIndex(headerRow, "Transaction Number");
     columns.ccn = findColumnIndex(headerRow, "CCN");
@@ -628,7 +692,7 @@
     var columns = resolveValidationColumns(headerRow, mode);
     var fields = validationFields[mode];
     var missing = fields
-      .filter(function (field) { return columns[field.key] === -1; })
+      .filter(function (field) { return !field.optional && columns[field.key] === -1; })
       .map(function (field) { return field.label; });
 
     if (missing.length) {
@@ -649,7 +713,8 @@
     }
 
     var fieldCounts = {};
-    fields.forEach(function (field) {
+    var activeFields = fields.filter(function (field) { return columns[field.key] !== -1; });
+    activeFields.forEach(function (field) {
       fieldCounts[field.label] = { blank: 0, zero: 0, total: 0 };
     });
 
@@ -673,7 +738,7 @@
       var classification = mode === "header"
         ? classifyHeaderRow(record.transactionNumber, record.ccn)
         : "";
-      fields.forEach(function (field) {
+      activeFields.forEach(function (field) {
         var status = classifyValidationValue(row[columns[field.key]]);
         if (!status) return;
 
@@ -836,7 +901,15 @@
       },
       compare: {
         dutyMatch: itemSummary ? Math.abs(headerSummary.totalDutyValue - itemSummary.totalDutyValue) <= 0.0001 : false,
-        gstMatch: itemSummary ? Math.abs(headerSummary.totalGstValue - itemSummary.totalGstValue) <= 0.0001 : false
+        gstMatch: itemSummary ? Math.abs(headerSummary.totalGstValue - itemSummary.totalGstValue) <= 0.0001 : false,
+        hstMatch: itemSummary && headerSummary.additionalTaxColumns.hst && itemSummary.additionalTaxColumns.hst
+          ? Math.abs(headerSummary.totalHstValue - itemSummary.totalHstValue) <= 0.0001 : null,
+        pstMatch: itemSummary && headerSummary.additionalTaxColumns.pst && itemSummary.additionalTaxColumns.pst
+          ? Math.abs(headerSummary.totalPstValue - itemSummary.totalPstValue) <= 0.0001 : null,
+        simaMatch: itemSummary && headerSummary.additionalTaxColumns.sima && itemSummary.additionalTaxColumns.sima
+          ? Math.abs(headerSummary.totalSimaValue - itemSummary.totalSimaValue) <= 0.0001 : null,
+        surtaxMatch: itemSummary && headerSummary.additionalTaxColumns.surtax && itemSummary.additionalTaxColumns.surtax
+          ? Math.abs(headerSummary.totalSurtaxValue - itemSummary.totalSurtaxValue) <= 0.0001 : null
       }
     };
   }

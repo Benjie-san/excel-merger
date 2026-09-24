@@ -28,9 +28,15 @@ The project currently has 3 user-facing tools:
   - Brokerage value counts (`0.0175`, `0.085`, `0.71`, `0.28`)
 - Number formatting normalization:
   - DutiesHeader: converts `Value for Duty -> Exchange Rate` range (or fallback columns J..Q) to numeric General format.
-  - DutiesItem: converts `Duty` and `Gov. Sales Tax` to numeric General format.
+  - DutiesItem: converts recognized numeric fields, including `Duty`, `GST` / `Gov. Sales Tax`, `HST`, `PST`, `SIMA`, and `Surtax`, to numeric format.
 
-## Current progress (2026-09-15)
+## Current progress (2026-09-25)
+- The D/T Header + Item workflow supports the expanded tax schema found in the September 2026 reports:
+  - Header accepts `GST` as an alias for `Gov. Sales Tax` and preserves `HST`, `PST`, `SIMA`, and `Surtax` between GST and Brokerage Total.
+  - Item accepts the same GST alias and preserves `HST`, `PST`, `SIMA`, and `Surtax` between GST and Inco Terms.
+  - Newly generated Header rows are populated by header label rather than fixed A:R positions. The added tax fields are initialized to numeric zero and `DDP` is written to the actual Inco Terms column.
+  - The completion report compares Header and Item totals for each added tax field when that field exists in both reports.
+  - Added tax fields participate in blank/zero validation and appear in the Header and Item field-count breakdowns.
 - D/T Header and Item post-processing validation is implemented and hardened.
 - Header validation reports blank values for all monitored fields, but zero `Duty` and `Gov. Sales Tax` findings only for LVS/PGA rows. CLVS zero Duty/GST values are expected and excluded; Header `Value for Duty` remains checked for every row.
 - The final D/T report UI is now split into `Overview`, `Header checks`, and `Item checks` tabs. Each validation tab shows its warning count, field totals, provenance/expected-zero notes, and a scrollable affected-record list. Tabs support keyboard navigation and responsive layouts.
@@ -81,7 +87,8 @@ The project currently has 3 user-facing tools:
 - Overwrites `Shipment Date`, `Arrival Date`, and `Release Date` with `RPT DATE`.
 - Sets `Exchange Rate` to `0`.
 - Sorts header data rows by brokerage fee descending.
-- Converts `Value for Duty -> Exchange Rate` to numeric accounting format in output.
+- Converts `Value for Duty -> Exchange Rate` to numeric accounting format in Header output, including `HST`, `PST`, `SIMA`, and `Surtax` when present.
+- Converts the recognized numeric Item fields to numbers, including `GST` / `Gov. Sales Tax`, `HST`, `PST`, `SIMA`, and `Surtax` when present.
 - Optional DutiesItem processing:
   - ensures a `CCN` column exists
   - builds a `Transaction Number -> CCN` lookup from the modified DutiesHeader output
@@ -95,9 +102,10 @@ The project currently has 3 user-facing tools:
   - blank brokerage fee row count
   - whether the client matched the brokerage JSON
   - header vs item Duty/GST total match when DutiesItem is provided
+  - header vs item HST/PST/SIMA/Surtax total matches when those columns exist in both reports
 - Post-processing validation runs on the final transformed rows before workbook download:
-  - DutiesHeader fields: `Value for Duty`, `Duty`, and `Gov. Sales Tax`.
-  - DutiesItem fields: `Quantity`, `Value for Duty`, `Duty`, `Value for Tax`, and `Gov. Sales Tax`.
+  - DutiesHeader required fields: `Value for Duty`, `Duty`, and `GST` / `Gov. Sales Tax`; optional `HST`, `PST`, `SIMA`, and `Surtax` fields are checked for blanks and zeros when present.
+  - DutiesItem required fields: `Quantity`, `Value for Duty`, `Duty`, `Value for Tax`, and `GST` / `Gov. Sales Tax`; optional `HST`, `PST`, `SIMA`, and `Surtax` fields are checked for blanks and zeros when present.
   - Blank/null cells and exact numeric zero values (including formatted/accounting zero) are warnings. Tiny nonzero values are not zero. This is a blank/zero check, not a general numeric-format validator.
   - Header `Duty` and `Gov. Sales Tax` zero warnings apply to LVS/PGA rows; CLVS rows are expected to have zero amounts in those fields and are excluded. Header `Value for Duty` remains checked for every row.
   - Findings show the output Excel row and resolved CCN; Item findings also show `Transaction Number` and `Line #`.

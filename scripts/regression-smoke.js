@@ -413,6 +413,76 @@ function findHeaderColumnIndex(row, expectedLabel) {
   return (row || []).findIndex((cell) => normalizeHeaderCell(cell) === normalizeHeaderCell(expectedLabel));
 }
 
+function runExpandedDtTaxSchemaRegression(workflowModule, brokerageRates) {
+  const issues = [];
+  const headerLabels = [
+    "Transaction Number", "CCN", "Port #", "Shipment Date", "Arrival Date", "Release Date",
+    "No. of Cartons", "Order Number", "Other Reference", "Value for Duty", "Duty", "GST",
+    "HST", "PST", "SIMA", "Surtax", "Brokerage Total", "Addl. Charges Total",
+    "Excise Tax Total", "Exchange Rate", "Inco Terms"
+  ];
+  const itemLabels = [
+    "Transaction Number", "Goods Description", "Line #", "Country of Origin", "Tariff Treatment",
+    "Part Number", "Quantity", "Port #", "Vendor Name", "Value for Duty", "HS #", "Duty Rate",
+    "Duty", "Value for Tax", "GST", "HST", "PST", "SIMA", "Surtax", "Inco Terms"
+  ];
+  const headerRows = [
+    ["CLIENT:", "SF EXPRESS"], ["RPT NAME:", "TEST"], ["RPT DATE :", "09/24/2026"], headerLabels,
+    ["LV-1", "CCN-1", "0497", "09/24/2026", "09/24/2026", "09/24/2026", "", "CCN-1", "", 10, 1, 2, 3, 0, 0, 0, 0.28, 0, 0, 1, "DDP"]
+  ];
+  const itemRows = [
+    ["CLIENT:", "SF EXPRESS"], ["RPT NAME:", "TEST"], ["RPT DATE :", "09/24/2026"], itemLabels,
+    ["LV-1", "ITEM", 1, "CN", "", "", 1, "0497", "VENDOR", 10, "", 0, 1, 13, 2, 3, 0, 0, 0, "DDP"]
+  ];
+  const sourceRows = [[], [], new Array(45).fill("")];
+  sourceRows[2][28] = "NEW-CCN";
+  sourceRows[2][44] = "12.34";
+  const metadata = { client: "SF EXPRESS", reportName: "TEST", reportDate: "09/24/2026" };
+
+  try {
+    const prepared = workflowModule.prepareHeaderRowsForModify({ targetRows: headerRows, metadata });
+    const modified = workflowModule.applyBrokerageAutomation({ sourceRows, preparedHeader: prepared, metadata, brokerageRates });
+    const item = workflowModule.prepareItemRowsWithCcn({ itemRows, preparedHeader: modified, metadata });
+    const summary = workflowModule.summarizeDtOutputs({ headerRows: modified.rows, itemRows: item.rows });
+    const header = modified.rows[modified.headerRowIndex];
+    const generated = modified.rows.find((row, index) => index > modified.headerRowIndex && row[header.indexOf("CCN")] === "NEW-CCN");
+
+    if (!generated) issues.push("Expanded tax schema did not generate the new Header row.");
+    if (generated) {
+      for (const label of ["Duty", "GST", "HST", "PST", "SIMA", "Surtax", "Addl. Charges Total", "Excise Tax Total", "Exchange Rate"]) {
+        if (generated[header.indexOf(label)] !== 0) issues.push(`Generated ${label} should be numeric zero.`);
+      }
+      if (generated[header.indexOf("Inco Terms")] !== "DDP") issues.push("Generated Inco Terms should be DDP in the expanded Header schema.");
+    }
+    if (summary.header.totalHstValue !== 3 || summary.item.totalHstValue !== 3 || summary.compare.hstMatch !== true) {
+      issues.push(`Expanded HST totals did not map between Header and Item: ${JSON.stringify(summary.compare)}`);
+    }
+    for (const key of ["pstMatch", "simaMatch", "surtaxMatch"]) {
+      if (summary.compare[key] !== true) issues.push(`Expanded tax comparison ${key} should match.`);
+    }
+    if (summary.validation.header.error || summary.validation.item.error) {
+      issues.push(`Expanded GST alias validation failed: ${summary.validation.header.error || summary.validation.item.error}`);
+    }
+    const headerFieldCounts = summary.validation.header.fieldCounts;
+    const itemFieldCounts = summary.validation.item.fieldCounts;
+    if (headerFieldCounts.HST?.zero !== 1 || headerFieldCounts.PST?.zero !== 2 || headerFieldCounts.SIMA?.zero !== 2 || headerFieldCounts.Surtax?.zero !== 2) {
+      issues.push(`Expanded Header zero breakdown is incorrect: ${JSON.stringify(headerFieldCounts)}`);
+    }
+    if (itemFieldCounts.HST?.zero !== 0 || itemFieldCounts.PST?.zero !== 1 || itemFieldCounts.SIMA?.zero !== 1 || itemFieldCounts.Surtax?.zero !== 1) {
+      issues.push(`Expanded Item zero breakdown is incorrect: ${JSON.stringify(itemFieldCounts)}`);
+    }
+    for (const label of ["HST", "PST", "SIMA", "Surtax"]) {
+      if (headerFieldCounts[label]?.blank !== 0 || itemFieldCounts[label]?.blank !== 0) {
+        issues.push(`${label} should have no blank findings in the expanded-schema fixture.`);
+      }
+    }
+  } catch (err) {
+    issues.push(`Expanded D/T tax schema threw: ${err.message}`);
+  }
+
+  return issues;
+}
+
 function runDtHeaderWorkflowRegression(rootDir) {
   const issues = [];
   let workflowModule;
@@ -456,13 +526,23 @@ function runDtHeaderWorkflowRegression(rootDir) {
   const row5HeaderPath = path.join(rootDir, "83082142460", "RLBE_161_8308214246_EWR_DutiesHeader.xlsx");
   const row5ItemPath = path.join(rootDir, "83082142460", "RLBE_161_8308214246_EWR_DutiesItem.xlsx");
   const brokerageRatesPath = path.join(process.cwd(), "public", "brokerage-rates.json");
+  const brokerageRates = readJson(brokerageRatesPath);
+  issues.push(...runExpandedDtTaxSchemaRegression(workflowModule, brokerageRates));
+
+  const fixturePaths = [row4HeaderPath, row4ItemPath, row4SourcePath, row5HeaderPath, row5ItemPath];
+  const missingFixturePaths = fixturePaths.filter((filePath) => !fs.existsSync(filePath));
+  if (missingFixturePaths.length) {
+    return {
+      issues,
+      skippedFixtureReason: `${missingFixturePaths.length} legacy D/T fixture(s) are unavailable; expanded-schema synthetic coverage still ran.`
+    };
+  }
 
   const { rows: row4HeaderRows } = readFirstSheetRows(row4HeaderPath);
   const { rows: row4ItemRows } = readFirstSheetRows(row4ItemPath);
   const { rows: row4SourceRows } = readFirstSheetRows(row4SourcePath);
   const { rows: row5HeaderRows } = readFirstSheetRows(row5HeaderPath);
   const { rows: row5ItemRows } = readFirstSheetRows(row5ItemPath);
-  const brokerageRates = readJson(brokerageRatesPath);
 
   const row4HeaderIndex = detectHeaderRowIndex(row4HeaderRows, "header");
   const row4ItemIndex = detectHeaderRowIndex(row4ItemRows, "item");
@@ -1218,6 +1298,9 @@ function main() {
 
   if (dtHeaderWorkflow.issues.length === 0) {
     console.log("D/T Header Workflow: PASS");
+    if (dtHeaderWorkflow.skippedFixtureReason) {
+      console.log(`  - ${dtHeaderWorkflow.skippedFixtureReason}`);
+    }
   } else {
     failed = true;
     console.log("D/T Header Workflow: FAIL");
