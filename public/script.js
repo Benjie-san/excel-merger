@@ -1888,7 +1888,7 @@ function generateTimestamp12() {
 
   const runCandataBtn = document.getElementById("runCandata");
   const resetCandataBtn = document.getElementById("resetCandataBtn");
-  const surtaxToggle = document.getElementById("candataSurtaxToggle");
+  const validationReport = document.getElementById("candataValidationReport");
 
   if (!candataForm || !headerDrop || !headerInput || !itemDrop || !itemInput) return;
 
@@ -2018,15 +2018,135 @@ function generateTimestamp12() {
     return s;
   }
 
-  function stableSortByGstDesc(records, gstKeyName) {
-    return records
-      .map((rec, idx) => ({ rec, idx }))
-      .sort((a, b) => {
-        const gstDiff = (b.rec[gstKeyName] || 0) - (a.rec[gstKeyName] || 0);
-        if (Math.abs(gstDiff) > 1e-9) return gstDiff;
-        return a.idx - b.idx;
-      })
-      .map((x) => x.rec);
+  const workflow = window.CandataWorkflow;
+  if (!workflow) throw new Error("Candata workflow is unavailable.");
+
+  function taxFromRow(row, indexMap, pstKey) {
+    return workflow.routeProvinceTax(
+      row[indexMap.province],
+      parseNumberZero(row[indexMap[pstKey]]),
+      parseNumberZero(row[indexMap.hst])
+    );
+  }
+
+  function addCollision(collisions, type, rowNumber, ccn, transaction, province, tax, beforePst, beforeHst) {
+    if (!tax.collision) return;
+    collisions.push({
+      type, row: rowNumber, ccn, transaction, province,
+      beforePst, beforeHst, afterPst: tax.pst, afterHst: tax.hst
+    });
+  }
+
+  function clearValidationReport() {
+    if (validationReport) validationReport.replaceChildren();
+  }
+
+  function reportTable(headers, rows) {
+    const table = document.createElement("table");
+    table.className = "candata-report-table";
+    const thead = table.createTHead();
+    const heading = thead.insertRow();
+    headers.forEach((header) => {
+      const cell = document.createElement("th");
+      cell.scope = "col";
+      cell.textContent = header;
+      heading.appendChild(cell);
+    });
+    const body = table.createTBody();
+    rows.forEach((values) => {
+      const row = body.insertRow();
+      values.forEach((value) => {
+        const cell = row.insertCell();
+        cell.textContent = String(value ?? "");
+      });
+    });
+    return table;
+  }
+
+  function renderValidationReport(collisions, duplicateGroups) {
+    if (!validationReport) return;
+    clearValidationReport();
+    const title = document.createElement("h4");
+    title.textContent = "Candata validation report";
+    validationReport.appendChild(title);
+    const summary = document.createElement("p");
+    summary.textContent = `${collisions.length} PST/HST collisions; ${duplicateGroups.length} duplicate Header CCN groups. Findings do not prevent downloads.`;
+    validationReport.appendChild(summary);
+
+    const collisionHeading = document.createElement("h5");
+    collisionHeading.textContent = "Existing HST when PST was moved";
+    validationReport.appendChild(collisionHeading);
+    if (collisions.length) {
+      validationReport.appendChild(reportTable(
+        ["Type", "Input row", "CCN", "Transaction", "Province", "PST before", "HST before", "PST after", "HST after"],
+        collisions.map((finding) => [finding.type, finding.row, finding.ccn, finding.transaction, finding.province,
+          finding.beforePst, finding.beforeHst, finding.afterPst, finding.afterHst])
+      ));
+    } else {
+      const clear = document.createElement("p");
+      clear.textContent = "No collisions found in Header or Item.";
+      validationReport.appendChild(clear);
+    }
+
+    const duplicateHeading = document.createElement("h5");
+    duplicateHeading.textContent = "Duplicate Header CCN consistency (original source amounts)";
+    validationReport.appendChild(duplicateHeading);
+    const note = document.createElement("p");
+    note.textContent = "Each field is compared before province routing. The first Header row supplies Duty, GST, PST and HST after routing; only SIMA and Surtax are summed across duplicate rows.";
+    validationReport.appendChild(note);
+    if (!duplicateGroups.length) {
+      const clear = document.createElement("p");
+      clear.textContent = "No duplicate Header CCNs found.";
+      validationReport.appendChild(clear);
+    }
+    duplicateGroups.forEach((group) => {
+      const section = document.createElement("section");
+      section.className = "candata-report-group";
+      const heading = document.createElement("h6");
+      heading.textContent = `CCN ${group.ccn} (${group.rows.length} input rows)`;
+      section.appendChild(heading);
+      const equality = document.createElement("p");
+      equality.textContent = ["duty", "gst", "pst", "hst"]
+        .map((field) => `${field.toUpperCase()}: ${group.equality[field] ? "equal" : "different"}`).join(" · ");
+      section.appendChild(equality);
+      section.appendChild(reportTable(
+        ["Input row", "Transaction", "Province", "Duty", "GST", "PST", "HST"],
+        group.rows.map((row) => [row.row, row.transaction, row.province,
+          row.raw.duty, row.raw.gst, row.raw.pst, row.raw.hst])
+      ));
+      validationReport.appendChild(section);
+    });
+  }
+
+  function transactionLookupKeys(ccnValue, transactionValue) {
+    const ccn = String(ccnValue || "").trim().toLowerCase();
+    const transaction = trimTransaction(transactionValue).toLowerCase();
+    const keys = [];
+    if (ccn && transaction) keys.push(`pair:${ccn}|${transaction}`);
+    if (ccn) keys.push(`ccn:${ccn}`);
+    if (transaction) keys.push(`transaction:${transaction}`);
+    return keys;
+  }
+
+  function buildPaymentTermsLookup(headerRows, headerIndexMap, dataStart) {
+    const lookup = new Map();
+    for (let r = dataStart; r < headerRows.length; r++) {
+      const row = headerRows[r] || [];
+      if (isEmptyRow(row)) continue;
+      const terms = sanitizeExcelText(row[headerIndexMap.paymentTerms]);
+      if (!terms) continue;
+      transactionLookupKeys(row[headerIndexMap.ccn], row[headerIndexMap.transaction]).forEach((key) => {
+        if (!lookup.has(key)) lookup.set(key, terms);
+      });
+    }
+    return lookup;
+  }
+
+  function findPaymentTerms(lookup, ccn, transaction) {
+    for (const key of transactionLookupKeys(ccn, transaction)) {
+      if (lookup.has(key)) return lookup.get(key);
+    }
+    return "";
   }
 
   function formatAsDollarNumber(ws, r, c, value, formatString) {
@@ -2077,19 +2197,19 @@ function generateTimestamp12() {
     return found;
   }
 
-  function buildItemRecords(itemRows, itemIndexMap, dataStart) {
+  function buildItemRecords(itemRows, itemIndexMap, dataStart, paymentTermsLookup, collisions) {
     const records = [];
     for (let r = dataStart; r < itemRows.length; r++) {
       const row = itemRows[r] || [];
       if (isEmptyRow(row)) continue;
 
       const ccn = String(row[itemIndexMap.ccn] || "").trim();
-      if (!ccn) continue;
 
       const gst = parseNumberZero(row[itemIndexMap.gst]);
-      const pst = parseNumberZero(row[itemIndexMap.pst]);
-      const surtax = parseNumberZero(row[itemIndexMap.surtax]);
-      const govSalesTax = gst + pst;
+      const provinceTax = taxFromRow(row, itemIndexMap, "pst");
+      addCollision(collisions, "Item", r + 1, ccn, String(row[itemIndexMap.transaction] || "").trim(),
+        String(row[itemIndexMap.province] || "").trim(), provinceTax,
+        parseNumberZero(row[itemIndexMap.pst]), parseNumberZero(row[itemIndexMap.hst]));
 
       records.push({
         transactionNumber: trimTransaction(row[itemIndexMap.transaction]),
@@ -2097,7 +2217,7 @@ function generateTimestamp12() {
         lineNumber: sanitizeExcelText(row[itemIndexMap.cciLine]),
         countryOfOrigin: sanitizeExcelText(row[itemIndexMap.countryOfOrigin]),
         tariffTreatment: sanitizeExcelText(row[itemIndexMap.tariffTreatment]),
-        partNumber: "",
+        partNumber: sanitizeExcelText(row[itemIndexMap.productNumber]),
         quantity: parseMaybeNumber(row[itemIndexMap.quantity]),
         port: sanitizeExcelText(row[itemIndexMap.port]),
         vendorName: sanitizeExcelText(row[itemIndexMap.vendorName]),
@@ -2106,18 +2226,22 @@ function generateTimestamp12() {
         dutyRate: parseMaybeNumber(row[itemIndexMap.dutyRate]),
         duty: parseNumberZero(row[itemIndexMap.customsDuty]),
         valueForTax: parseNumberZero(row[itemIndexMap.valueForTax]),
-        govSalesTax,
-        surtax,
-        incoTerms: sanitizeExcelText(row[itemIndexMap.paymentTerms]),
+        gst,
+        hst: provinceTax.hst,
+        pst: provinceTax.pst,
+        sima: parseNumberZero(row[itemIndexMap.sima]),
+        surtax: parseNumberZero(row[itemIndexMap.surtax]),
+        incoTerms: findPaymentTerms(paymentTermsLookup, ccn, row[itemIndexMap.transaction]),
         ccn,
         safeCcn: sanitizeExcelText(ccn)
       });
     }
-    return stableSortByGstDesc(records, "govSalesTax");
+    return records;
   }
 
   function buildHeaderRecords(headerRows, headerIndexMap, dataStart) {
-    const records = [];
+    const entries = [];
+    const collisions = [];
     for (let r = dataStart; r < headerRows.length; r++) {
       const row = headerRows[r] || [];
       if (isEmptyRow(row)) continue;
@@ -2125,48 +2249,63 @@ function generateTimestamp12() {
       const ccn = String(row[headerIndexMap.ccn] || "").trim();
       if (!ccn) continue;
 
-      const releaseFormatted = formatDateMMDDYYYY(row[headerIndexMap.releaseDate]);
-      const headerValueForDuty = parseNumberZero(row[headerIndexMap.totalValueForDuty]);
+      const transaction = trimTransaction(row[headerIndexMap.transaction]);
+      const provinceTax = taxFromRow(row, headerIndexMap, "totalProvincialSalesTax");
+      addCollision(collisions, "Header", r + 1, ccn, String(row[headerIndexMap.transaction] || "").trim(),
+        String(row[headerIndexMap.province] || "").trim(), provinceTax,
+        parseNumberZero(row[headerIndexMap.totalProvincialSalesTax]), parseNumberZero(row[headerIndexMap.hst]));
       const headerDuty = parseNumberZero(row[headerIndexMap.totalCustomsDuties]);
       const headerGst = parseNumberZero(row[headerIndexMap.totalGst]);
-      const headerPst = parseNumberZero(row[headerIndexMap.totalProvincialSalesTax]);
-      const headerSurtax = parseNumberZero(row[headerIndexMap.surtax]);
-      const recomputedHeaderGst = headerGst + headerPst;
 
-      records.push({
-        transactionNumber: trimTransaction(row[headerIndexMap.transaction]),
+      const releaseFormatted = formatDateMMDDYYYY(row[headerIndexMap.releaseDate]);
+      const headerValueForDuty = parseNumberZero(row[headerIndexMap.totalValueForDuty]);
+
+      const record = {
+        transactionNumber: transaction,
         ccn: sanitizeExcelText(ccn),
         port: sanitizeExcelText(row[headerIndexMap.portNumber]),
-        shipmentDate: releaseFormatted,
-        arrivalDate: releaseFormatted,
+        shipmentDate: formatDateMMDDYYYY(row[headerIndexMap.directShipDate]),
+        arrivalDate: formatDateMMDDYYYY(row[headerIndexMap.etaDate]),
         releaseDate: releaseFormatted,
         cartons: "",
-        orderNumber: sanitizeExcelText(ccn),
+        orderNumber: sanitizeExcelText(row[headerIndexMap.orderNumber]),
         otherReference: "",
         valueForDuty: headerValueForDuty,
         duty: headerDuty,
-        // Explicitly recompute GST from Header GST + Header PST.
-        // Keep zero values as zero (no blank fallback).
-        govSalesTax: recomputedHeaderGst,
-        surtax: headerSurtax,
-        brokerageTotal: "",
+        gst: headerGst,
+        hst: provinceTax.hst,
+        pst: provinceTax.pst,
+        sima: parseNumberZero(row[headerIndexMap.sima]),
+        surtax: parseNumberZero(row[headerIndexMap.surtax]),
+        brokerageTotal: 0,
         addlChargesTotal: 0,
-        assessmentTotal: 0,
         exciseTaxTotal: 0,
-        exchangeRate: 0,
+        exchangeRate: 1,
         incoTerms: sanitizeExcelText(row[headerIndexMap.paymentTerms])
+      };
+      entries.push({
+        row: r + 1, ccn, transaction: String(row[headerIndexMap.transaction] || "").trim(),
+        province: String(row[headerIndexMap.province] || "").trim(),
+        duty: headerDuty, gst: headerGst,
+        pst: parseNumberZero(row[headerIndexMap.totalProvincialSalesTax]),
+        hst: parseNumberZero(row[headerIndexMap.hst]),
+        raw: {
+          duty: String(row[headerIndexMap.totalCustomsDuties] ?? ""),
+          gst: String(row[headerIndexMap.totalGst] ?? ""),
+          pst: String(row[headerIndexMap.totalProvincialSalesTax] ?? ""),
+          hst: headerIndexMap.hst >= 0 ? String(row[headerIndexMap.hst] ?? "") : "(no HST column)"
+        },
+        record
       });
     }
-    return stableSortByGstDesc(records, "govSalesTax");
+    return { ...workflow.buildHeaderGroups(entries), collisions };
   }
 
-  function buildItemOutputAoA(itemRecords, reportName, reportDate, clientName, options = {}) {
-    const includeSurtax = options.includeSurtax === true;
+  function buildItemOutputAoA(itemRecords, reportName, reportDate, clientName) {
     const aoa = [];
     aoa.push(["CLIENT:", clientName]);
     aoa.push(["RPT NAME:", reportName || "AWB #"]);
     aoa.push(["RPT DATE :", reportDate || ""]);
-    aoa.push([]);
 
     const outputHeaders = [
       "Transaction Number",
@@ -2183,11 +2322,13 @@ function generateTimestamp12() {
       "Duty Rate",
       "Duty",
       "Value for Tax",
-      "Gov. Sales Tax",
+      "GST",
+      "HST",
+      "PST",
+      "SIMA",
+      "Surtax",
       "Inco Terms",
-      "CCN"
     ];
-    if (includeSurtax) outputHeaders.splice(15, 0, "Surtax");
     aoa.push(outputHeaders);
 
     itemRecords.forEach((rec) => {
@@ -2206,24 +2347,24 @@ function generateTimestamp12() {
         rec.dutyRate,
         rec.duty,
         rec.valueForTax,
-        rec.govSalesTax,
+        rec.gst,
+        rec.hst,
+        rec.pst,
+        rec.sima,
+        rec.surtax,
         rec.incoTerms,
-        rec.safeCcn
       ];
-      if (includeSurtax) outputRow.splice(15, 0, rec.surtax);
       aoa.push(outputRow);
     });
 
     return aoa;
   }
 
-  function buildHeaderOutputAoA(headerRecords, reportName, reportDate, clientName, options = {}) {
-    const includeSurtax = options.includeSurtax === true;
+  function buildHeaderOutputAoA(headerRecords, reportName, reportDate, clientName) {
     const aoa = [];
     aoa.push(["CLIENT:", clientName]);
     aoa.push(["RPT NAME:", reportName]);
     aoa.push(["RPT DATE :", reportDate]);
-    aoa.push([]);
 
     const outputHeaders = [
       "Transaction Number",
@@ -2237,15 +2378,17 @@ function generateTimestamp12() {
       "Other Reference",
       "Value for Duty",
       "Duty",
-      "Gov. Sales Tax",
+      "GST",
+      "HST",
+      "PST",
+      "SIMA",
+      "Surtax",
       "Brokerage Total",
       "Addl. Charges Total",
-      "Assessment Total",
       "Excise Tax Total",
       "Exchange Rate",
       "Inco Terms"
     ];
-    if (includeSurtax) outputHeaders.splice(12, 0, "Surtax");
     aoa.push(outputHeaders);
 
     headerRecords.forEach((rec) => {
@@ -2261,15 +2404,17 @@ function generateTimestamp12() {
         rec.otherReference,
         rec.valueForDuty,
         rec.duty,
-        rec.govSalesTax,
+        rec.gst,
+        rec.hst,
+        rec.pst,
+        rec.sima,
+        rec.surtax,
         rec.brokerageTotal,
         rec.addlChargesTotal,
-        rec.assessmentTotal,
         rec.exciseTaxTotal,
         rec.exchangeRate,
         rec.incoTerms
       ];
-      if (includeSurtax) outputRow.splice(12, 0, rec.surtax);
       aoa.push(outputRow);
     });
 
@@ -2314,23 +2459,22 @@ function generateTimestamp12() {
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet(headerAoA);
 
-    const fmtJtoL = '_("$"* #,##0.00_);_("$"* \\(#,##0.00\\);_("$"* "-"??_);_(@_)';
-    const fmtMtoR = '_([$$-409]* #,##0.00_);_([$$-409]* \\(#,##0.00\\);_([$$-409]* "-"??_);_(@_)';
-    const headerRow = headerAoA[4] || [];
-    const brokerageIndex = headerRow.indexOf("Brokerage Total");
-    const lastNumericIndex = headerRow.indexOf("Exchange Rate");
+    const fmtCurrency = '_([$$-409]* #,##0.00_);_([$$-409]* \\(#,##0.00\\);_([$$-409]* "-"??_);_(@_)';
+    const headerRow = headerAoA[3] || [];
+    const valueForDutyIndex = headerRow.indexOf("Value for Duty");
+    const exciseTaxIndex = headerRow.indexOf("Excise Tax Total");
+    const exchangeRateIndex = headerRow.indexOf("Exchange Rate");
 
-    for (let r = 5; r < headerAoA.length; r++) {
-      for (let c = 9; c <= lastNumericIndex; c++) {
+    for (let r = 4; r < headerAoA.length; r++) {
+      for (let c = valueForDutyIndex; c <= exciseTaxIndex; c++) {
         const raw = (headerAoA[r] && headerAoA[r][c] !== undefined) ? headerAoA[r][c] : 0;
-        if (c === brokerageIndex && isEmptyCell(raw)) {
-          const brokerageRef = XLSX.utils.encode_cell({ r, c });
-          delete ws[brokerageRef];
-          continue;
-        }
         const num = parseNumberZero(raw);
-        const fmt = c <= 11 ? fmtJtoL : fmtMtoR;
-        formatAsDollarNumber(ws, r, c, num, fmt);
+        formatAsDollarNumber(ws, r, c, num, fmtCurrency);
+      }
+      if (exchangeRateIndex >= 0) {
+        const raw = (headerAoA[r] && headerAoA[r][exchangeRateIndex] !== undefined) ? headerAoA[r][exchangeRateIndex] : 1;
+        const ref = XLSX.utils.encode_cell({ r, c: exchangeRateIndex });
+        ws[ref] = { t: "n", v: parseNumberZero(raw), z: "0.00" };
       }
     }
 
@@ -2341,15 +2485,20 @@ function generateTimestamp12() {
     };
   }
 
+  let conversionRunning = false;
   async function runConversion() {
+    if (conversionRunning || (runCandataBtn && runCandataBtn.disabled)) return;
+    clearValidationReport();
     const headerFile = headerInput.files && headerInput.files[0] ? headerInput.files[0] : null;
     const itemFile = itemInput.files && itemInput.files[0] ? itemInput.files[0] : null;
-    const includeSurtax = !!(surtaxToggle && surtaxToggle.checked);
 
     if (!headerFile || !itemFile) {
       alert("Please provide both DutiesHeader and Candata Item files.");
       return;
     }
+
+    conversionRunning = true;
+    if (runCandataBtn) runCandataBtn.disabled = true;
 
     const headerSpecs = [
       { key: "transaction", label: "Transaction Number", matchers: [/^transaction number$/i] },
@@ -2362,8 +2511,11 @@ function generateTimestamp12() {
       { key: "totalValueForDuty", label: "Total Value For Duty (CAD)", matchers: [/total value for duty/i] },
       { key: "totalCustomsDuties", label: "Total Customs Duties (CAD)", matchers: [/total customs duties/i] },
       { key: "totalGst", label: "Total GST (CAD)", matchers: [/^total gst/i] },
-      { key: "surtax", label: "Surtax (CAD)", optional: true, matchers: [/^surtax/i] },
-      { key: "totalProvincialSalesTax", label: "Total Provincial Sales Tax (CAD)", matchers: [/total provincial sales tax/i] },
+      { key: "totalProvincialSalesTax", label: "Provincial Sales Tax (CAD)", matchers: [/^(?:total )?provincial sales tax/i] },
+      workflow.hstColumnSpec(),
+      { key: "sima", label: "SIMA (CAD)", matchers: [/^sima(?: \(cad\))?$/i] },
+      { key: "surtax", label: "Surtax (CAD)", matchers: [/^surtax(?: \(cad\))?$/i] },
+      { key: "province", label: "Province (CAD)", matchers: [/^province(?: \(cad\))?$/i] },
       { key: "paymentTerms", label: "Payment Terms", matchers: [/^payment terms$/i, /^inco terms$/i] },
       { key: "billOfLading", label: "Bill of Lading", matchers: [/bill of lading/i, /\bawb\b/i] }
     ];
@@ -2372,11 +2524,12 @@ function generateTimestamp12() {
       { key: "transaction", label: "Transaction Number", matchers: [/^transaction number$/i] },
       { key: "productDescription", label: "Product Description", matchers: [/product description/i, /goods description/i] },
       { key: "cciLine", label: "CCI Line#", matchers: [/cci line#?/i, /\bline #\b/i] },
+      { key: "productNumber", label: "Product Number", matchers: [/^product number$/i, /^part number$/i] },
       { key: "countryOfOrigin", label: "Country of Origin", matchers: [/country of origin/i] },
       { key: "tariffTreatment", label: "Tariff Treatment", matchers: [/tariff treatment/i] },
       { key: "quantity", label: "Quantity", matchers: [/^quantity$/i] },
       { key: "port", label: "Port Number", matchers: [/^port number$/i, /^port #$/i] },
-      { key: "vendorName", label: "Vendor Name", matchers: [/vendor name/i] },
+      { key: "vendorName", label: "Vendor Name", matchers: [/^vendor(?: name)?$/i] },
       { key: "valueForDuty", label: "Value For Duty (CAD)", matchers: [/value for duty/i] },
       { key: "classification", label: "Classification", matchers: [/^classification$/i, /^hs #$/i] },
       { key: "dutyRate", label: "Duty Rate", matchers: [/^duty rate$/i] },
@@ -2384,12 +2537,15 @@ function generateTimestamp12() {
       { key: "valueForTax", label: "Value for Tax (CAD)", matchers: [/value for tax/i] },
       { key: "gst", label: "GST (CAD)", matchers: [/^gst/i, /gov\.?\s*sales/i] },
       { key: "pst", label: "Provincial Sales Tax (CAD)", matchers: [/provincial sales tax/i, /\bpst\b/i] },
-      { key: "surtax", label: "Surtax (CAD)", optional: true, matchers: [/^surtax/i] },
-      { key: "paymentTerms", label: "Payment Terms", matchers: [/^payment terms$/i, /^inco terms$/i] },
+      workflow.hstColumnSpec(),
+      { key: "sima", label: "SIMA (CAD)", matchers: [/^sima(?: \(cad\))?$/i] },
+      { key: "surtax", label: "Surtax (CAD)", matchers: [/^surtax(?: \(cad\))?$/i] },
+      { key: "province", label: "Province (CAD)", matchers: [/^province(?: \(cad\))?$/i] },
       { key: "ccn", label: "Cargo Control Number", matchers: [/cargo control number/i, /^ccn$/i] },
       { key: "billOfLading", label: "Bill of Lading", matchers: [/bill of lading/i, /\bawb\b/i] }
     ];
 
+    let completed = false;
     try {
       const clientName = "";
 
@@ -2402,17 +2558,30 @@ function generateTimestamp12() {
       const headerDataStart = headerFound.rowIndex + 1;
       const itemDataStart = itemFound.rowIndex + 1;
 
-      const itemRecords = buildItemRecords(itemRows, itemFound.indexMap, itemDataStart);
+      const paymentTermsLookup = buildPaymentTermsLookup(
+        headerRows,
+        headerFound.indexMap,
+        headerDataStart
+      );
+      const collisions = [];
+      const itemRecords = buildItemRecords(
+        itemRows,
+        itemFound.indexMap,
+        itemDataStart,
+        paymentTermsLookup,
+        collisions
+      );
       if (!itemRecords.length) {
         alert("Candata Duties Item: No data rows found after header.");
         return;
       }
 
-      const headerRecords = buildHeaderRecords(
+      const headerResult = buildHeaderRecords(
         headerRows,
         headerFound.indexMap,
         headerDataStart
       );
+      const headerRecords = headerResult.records;
       if (!headerRecords.length) {
         alert("DutiesHeader: No data rows found after header.");
         return;
@@ -2440,20 +2609,20 @@ function generateTimestamp12() {
         headerRecords,
         headerReportName,
         firstReleaseDate || "",
-        clientName,
-        { includeSurtax }
+        clientName
       );
       const itemAoA = buildItemOutputAoA(
         itemRecords,
         headerReportName,
         firstReleaseDate || "",
-        clientName,
-        { includeSurtax }
+        clientName
       );
 
       const headerDownload = buildHeaderWorkbookDownload(headerAoA, headerSheetName, headerFile.name);
       const itemDownload = buildItemWorkbookDownload(itemAoA, itemFile.name);
       const safeItemName = ensureDistinctFileName(headerDownload.fileName, itemDownload.fileName, "ITEM");
+
+      renderValidationReport(headerResult.collisions.concat(collisions), headerResult.duplicateGroups);
 
       // Trigger downloads sequentially to improve browser reliability for multi-file download.
       triggerDownloadBlob(headerDownload.blob, headerDownload.fileName);
@@ -2462,9 +2631,14 @@ function generateTimestamp12() {
       }, 180);
 
       if (resetCandataBtn) resetCandataBtn.style.display = "flex";
+      completed = true;
     } catch (err) {
+      clearValidationReport();
       console.error("Candata conversion error:", err);
       alert(err && err.message ? err.message : `Candata conversion failed: ${err}`);
+    } finally {
+      conversionRunning = false;
+      if (runCandataBtn && !completed) runCandataBtn.disabled = false;
     }
   }
 
@@ -2483,6 +2657,7 @@ function generateTimestamp12() {
         fileInput.files = dt.files;
       } catch (err) { /* ignore */ }
       if (fileNameDisplay) fileNameDisplay.textContent = f.name;
+      if (runCandataBtn) runCandataBtn.disabled = false;
     });
 
     dropArea.addEventListener("click", () => fileInput.click());
@@ -2495,6 +2670,7 @@ function generateTimestamp12() {
         return;
       }
       if (fileNameDisplay) fileNameDisplay.textContent = f.name;
+      if (runCandataBtn) runCandataBtn.disabled = false;
     });
   }
 
@@ -2510,6 +2686,8 @@ function generateTimestamp12() {
       candataForm.reset();
       if (headerFileName) headerFileName.textContent = "";
       if (itemFileName) itemFileName.textContent = "";
+      clearValidationReport();
+      if (runCandataBtn) runCandataBtn.disabled = false;
       resetCandataBtn.style.display = "none";
     });
   }

@@ -292,11 +292,6 @@
             </div>
             <p id="candataItemFileName" class="filename"></p>
 
-            <label class="candata-surtax-toggle" for="candataSurtaxToggle">
-              <input type="checkbox" id="candataSurtaxToggle" />
-              <span>Include Surtax in GETS output</span>
-            </label>
-
             <hr>
 
             <button type="button" id="runCandata" class="btn-primary">Run Conversion</button>
@@ -309,6 +304,7 @@
                 <p>Start Over</p>
               </button>
             </div>
+            <div id="candataValidationReport" class="candata-validation-report" role="status" aria-live="polite"></div>
           </div>
         </div>
       </form>
@@ -357,6 +353,7 @@
 
   <button id="scrollTopBtn" type="button" aria-label="Scroll to top">↑</button>
   <script src="dt-header-workflow.js"></script>
+  <script src="candata-workflow.js"></script>
   <script src="script.js"></script>
 </body>
 </html>
