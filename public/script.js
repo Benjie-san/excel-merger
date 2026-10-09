@@ -2239,7 +2239,7 @@ function generateTimestamp12() {
     return records;
   }
 
-  function buildHeaderRecords(headerRows, headerIndexMap, dataStart) {
+  function buildHeaderRecords(headerRows, headerIndexMap, dataStart, sourceHadHst = headerIndexMap.hst >= 0) {
     const entries = [];
     const collisions = [];
     for (let r = dataStart; r < headerRows.length; r++) {
@@ -2293,7 +2293,7 @@ function generateTimestamp12() {
           duty: String(row[headerIndexMap.totalCustomsDuties] ?? ""),
           gst: String(row[headerIndexMap.totalGst] ?? ""),
           pst: String(row[headerIndexMap.totalProvincialSalesTax] ?? ""),
-          hst: headerIndexMap.hst >= 0 ? String(row[headerIndexMap.hst] ?? "") : "(no HST column)"
+          hst: sourceHadHst ? String(row[headerIndexMap.hst] ?? "") : "(no HST column)"
         },
         record
       });
@@ -2549,11 +2549,15 @@ function generateTimestamp12() {
     try {
       const clientName = "";
 
-      const { rows: headerRows, sheetName: headerSheetName } = await getFirstSheetRows(headerFile);
-      const { rows: itemRows } = await getFirstSheetRows(itemFile);
+      const { rows: sourceHeaderRows, sheetName: headerSheetName } = await getFirstSheetRows(headerFile);
+      const { rows: sourceItemRows } = await getFirstSheetRows(itemFile);
 
-      const headerFound = validateRequiredColumns(headerRows, headerSpecs, "DutiesHeader");
-      const itemFound = validateRequiredColumns(itemRows, itemSpecs, "Candata Duties Item");
+      const headerDetected = validateRequiredColumns(sourceHeaderRows, headerSpecs, "DutiesHeader");
+      const itemDetected = validateRequiredColumns(sourceItemRows, itemSpecs, "Candata Duties Item");
+      const headerFound = workflow.normalizeTaxColumns(sourceHeaderRows, headerDetected, "totalGst", "totalProvincialSalesTax");
+      const itemFound = workflow.normalizeTaxColumns(sourceItemRows, itemDetected, "gst", "pst");
+      const headerRows = headerFound.rows;
+      const itemRows = itemFound.rows;
 
       const headerDataStart = headerFound.rowIndex + 1;
       const itemDataStart = itemFound.rowIndex + 1;
@@ -2579,7 +2583,8 @@ function generateTimestamp12() {
       const headerResult = buildHeaderRecords(
         headerRows,
         headerFound.indexMap,
-        headerDataStart
+        headerDataStart,
+        headerFound.sourceHadHst
       );
       const headerRecords = headerResult.records;
       if (!headerRecords.length) {

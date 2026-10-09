@@ -1006,12 +1006,16 @@ function runCandataRegression(rootDir) {
       { key: "billOfLading", label: "Bill of Lading", matchers: [/bill of lading/i, /\bawb\b/i] }
     ];
 
-    const { rows: headerRows } = readFirstSheetRows(headerIn);
-    const { rows: itemRows } = readFirstSheetRows(itemIn);
+    const { rows: rawHeaderRows } = readFirstSheetRows(headerIn);
+    const { rows: rawItemRows } = readFirstSheetRows(itemIn);
     const { rows: headerSampleRows } = readFirstSheetRows(headerSample);
     const { rows: itemSampleRows } = readFirstSheetRows(itemSample);
-    const headerFound = validateRequiredColumns(headerRows, headerSpecs, "DutiesHeader");
-    const itemFound = validateRequiredColumns(itemRows, itemSpecs, "Candata Duties Item");
+    const headerDetected = validateRequiredColumns(rawHeaderRows, headerSpecs, "DutiesHeader");
+    const itemDetected = validateRequiredColumns(rawItemRows, itemSpecs, "Candata Duties Item");
+    const headerFound = CandataWorkflow.normalizeTaxColumns(rawHeaderRows, headerDetected, "totalGst", "totalProvincialSalesTax");
+    const itemFound = CandataWorkflow.normalizeTaxColumns(rawItemRows, itemDetected, "gst", "pst");
+    const headerRows = headerFound.rows;
+    const itemRows = itemFound.rows;
     const headerDataStart = headerFound.rowIndex + 1;
     const itemDataStart = itemFound.rowIndex + 1;
     const termsLookup = buildPaymentTermsLookup(headerRows, headerFound.indexMap, headerDataStart);
