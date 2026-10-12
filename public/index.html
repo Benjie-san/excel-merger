@@ -32,27 +32,27 @@
 
       <nav class="side-bar-nav" aria-label="Billing workflows">
         <p class="side-bar-section-label">Tools</p>
-        <button type="button" class="nav-item is-active" id="link-merger" data-view="merger" aria-current="page">
+        <button type="button" class="nav-item is-active" id="link-merger" data-view="merger" aria-current="page" aria-label="Excel Merger">
           <i class="bi bi-grid-1x2-fill" aria-hidden="true"></i>
           <span class="nav-item-label">Excel Merger</span>
           <span class="nav-item-index">01</span>
         </button>
-        <button type="button" class="nav-item" id="link-modifier" data-view="modify">
+        <button type="button" class="nav-item" id="link-modifier" data-view="modify" aria-label="D/T Header + Item">
           <i class="bi bi-arrow-left-right" aria-hidden="true"></i>
           <span class="nav-item-label">D/T Header + Item</span>
           <span class="nav-item-index">02</span>
         </button>
-        <button type="button" class="nav-item" id="link-analyzer" data-view="analyzer">
+        <button type="button" class="nav-item" id="link-analyzer" data-view="analyzer" aria-label="Header + Item Analyzer">
           <i class="bi bi-search" aria-hidden="true"></i>
           <span class="nav-item-label">Header + Item Analyzer</span>
           <span class="nav-item-index">03</span>
         </button>
-        <button type="button" class="nav-item" id="link-candata" data-view="candata">
+        <button type="button" class="nav-item" id="link-candata" data-view="candata" aria-label="Candata to GETS">
           <i class="bi bi-layout-text-sidebar-reverse" aria-hidden="true"></i>
           <span class="nav-item-label">Candata → GETS</span>
           <span class="nav-item-index">04</span>
         </button>
-        <button type="button" class="nav-item" id="link-apc-item" data-view="apc-item">
+        <button type="button" class="nav-item" id="link-apc-item" data-view="apc-item" aria-label="APC D/T Item">
           <i class="bi bi-file-earmark-spreadsheet-fill" aria-hidden="true"></i>
           <span class="nav-item-label">APC D/T Item</span>
           <span class="nav-item-index">05</span>
@@ -267,46 +267,43 @@
     </div>
 
     <!-- =======================================================
-         CANDATA TO GETS FORMAT (UPCOMING FEATURE)
+         CANDATA TO GETS FORMAT
          ======================================================= -->
     <div id="candataTool" class="tool-section">
       <form id="candataForm">
-        <h2>Candata to Gets Format</h2>
-        <p class="sub">Upload DutiesHeader and Candata Item files for GETS conversion.</p>
+        <h2>Candata to GETS</h2>
+        <p class="sub">Upload the Header and Item workbooks, then review source tax findings alongside your GETS downloads.</p>
 
-        <div class="analyzer-layout">
-          <div class="analyzer-main">
-            <!-- DROP ZONE FOR DUTIES HEADER FILE -->
-            <div id="candataHeaderDropZone" class="drop-area">
+        <div class="candata-upload-grid">
+          <div class="candata-upload-field">
+            <h3 id="candataHeaderLabel">Header workbook</h3>
+            <div id="candataHeaderDropZone" class="drop-area" role="button" tabindex="0" aria-labelledby="candataHeaderLabel candataHeaderPrompt" aria-describedby="candataHeaderFileName">
               <i class="upload-icon bi bi-file-earmark-arrow-up-fill" aria-hidden="true"></i>
-              <p>Drop the Candata DutiesHeader file here or choose a file.</p>
-              <input type="file" id="candataHeaderFileInput" accept=".xlsx" hidden />
+              <p id="candataHeaderPrompt">Drop DutiesHeader here or choose a .xlsx file</p>
+              <input type="file" id="candataHeaderFileInput" accept=".xlsx" aria-label="Header workbook" hidden />
             </div>
-            <p id="candataHeaderFileName" class="filename"></p>
-
-            <!-- DROP ZONE FOR CANDATA ITEM FILE -->
-            <div id="candataItemDropZone" class="drop-area">
+            <p id="candataHeaderFileName" class="filename" aria-live="polite">No file selected</p>
+          </div>
+          <div class="candata-upload-field">
+            <h3 id="candataItemLabel">Item workbook</h3>
+            <div id="candataItemDropZone" class="drop-area" role="button" tabindex="0" aria-labelledby="candataItemLabel candataItemPrompt" aria-describedby="candataItemFileName">
               <i class="upload-icon bi bi-file-earmark-arrow-up-fill" aria-hidden="true"></i>
-              <p>Drop the Candata DutiesItem file here or choose a file.</p>
-              <input type="file" id="candataItemFileInput" accept=".xlsx" hidden />
+              <p id="candataItemPrompt">Drop DutiesItem here or choose a .xlsx file</p>
+              <input type="file" id="candataItemFileInput" accept=".xlsx" aria-label="Item workbook" hidden />
             </div>
-            <p id="candataItemFileName" class="filename"></p>
-
-            <hr>
-
-            <button type="button" id="runCandata" class="btn-primary">Run Conversion</button>
-
-            <div id="candata-result-btn">
-              <button type="button" id="resetCandataBtn" style="display:none;">
-                <span class="material-symbols-outlined">
-                refresh
-                </span>
-                <p>Start Over</p>
-              </button>
-            </div>
-            <div id="candataValidationReport" class="candata-validation-report" role="status" aria-live="polite"></div>
+            <p id="candataItemFileName" class="filename" aria-live="polite">No file selected</p>
           </div>
         </div>
+        <div class="candata-actions">
+            <button type="button" id="runCandata" class="btn-primary">Run Conversion</button>
+            <div id="candata-result-btn">
+              <button type="button" id="resetCandataBtn" style="display:none;">
+                <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
+                <span>Start Over</span>
+              </button>
+            </div>
+        </div>
+        <div id="candataValidationReport" class="candata-validation-report" aria-live="polite"></div>
       </form>
     </div>
 
@@ -354,6 +351,7 @@
   <button id="scrollTopBtn" type="button" aria-label="Scroll to top">↑</button>
   <script src="dt-header-workflow.js"></script>
   <script src="candata-workflow.js"></script>
+  <script src="candata-report.js"></script>
   <script src="script.js"></script>
 </body>
 </html>

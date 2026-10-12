@@ -2041,81 +2041,10 @@ function generateTimestamp12() {
     if (validationReport) validationReport.replaceChildren();
   }
 
-  function reportTable(headers, rows) {
-    const table = document.createElement("table");
-    table.className = "candata-report-table";
-    const thead = table.createTHead();
-    const heading = thead.insertRow();
-    headers.forEach((header) => {
-      const cell = document.createElement("th");
-      cell.scope = "col";
-      cell.textContent = header;
-      heading.appendChild(cell);
-    });
-    const body = table.createTBody();
-    rows.forEach((values) => {
-      const row = body.insertRow();
-      values.forEach((value) => {
-        const cell = row.insertCell();
-        cell.textContent = String(value ?? "");
-      });
-    });
-    return table;
-  }
-
   function renderValidationReport(collisions, duplicateGroups) {
     if (!validationReport) return;
-    clearValidationReport();
-    const title = document.createElement("h4");
-    title.textContent = "Candata validation report";
-    validationReport.appendChild(title);
-    const summary = document.createElement("p");
-    summary.textContent = `${collisions.length} PST/HST collisions; ${duplicateGroups.length} duplicate Header CCN groups. Findings do not prevent downloads.`;
-    validationReport.appendChild(summary);
-
-    const collisionHeading = document.createElement("h5");
-    collisionHeading.textContent = "Existing HST when PST was moved";
-    validationReport.appendChild(collisionHeading);
-    if (collisions.length) {
-      validationReport.appendChild(reportTable(
-        ["Type", "Input row", "CCN", "Transaction", "Province", "PST before", "HST before", "PST after", "HST after"],
-        collisions.map((finding) => [finding.type, finding.row, finding.ccn, finding.transaction, finding.province,
-          finding.beforePst, finding.beforeHst, finding.afterPst, finding.afterHst])
-      ));
-    } else {
-      const clear = document.createElement("p");
-      clear.textContent = "No collisions found in Header or Item.";
-      validationReport.appendChild(clear);
-    }
-
-    const duplicateHeading = document.createElement("h5");
-    duplicateHeading.textContent = "Duplicate Header CCN consistency (original source amounts)";
-    validationReport.appendChild(duplicateHeading);
-    const note = document.createElement("p");
-    note.textContent = "Each field is compared before province routing. The first Header row supplies Duty, GST, PST and HST after routing; only SIMA and Surtax are summed across duplicate rows.";
-    validationReport.appendChild(note);
-    if (!duplicateGroups.length) {
-      const clear = document.createElement("p");
-      clear.textContent = "No duplicate Header CCNs found.";
-      validationReport.appendChild(clear);
-    }
-    duplicateGroups.forEach((group) => {
-      const section = document.createElement("section");
-      section.className = "candata-report-group";
-      const heading = document.createElement("h6");
-      heading.textContent = `CCN ${group.ccn} (${group.rows.length} input rows)`;
-      section.appendChild(heading);
-      const equality = document.createElement("p");
-      equality.textContent = ["duty", "gst", "pst", "hst"]
-        .map((field) => `${field.toUpperCase()}: ${group.equality[field] ? "equal" : "different"}`).join(" · ");
-      section.appendChild(equality);
-      section.appendChild(reportTable(
-        ["Input row", "Transaction", "Province", "Duty", "GST", "PST", "HST"],
-        group.rows.map((row) => [row.row, row.transaction, row.province,
-          row.raw.duty, row.raw.gst, row.raw.pst, row.raw.hst])
-      ));
-      validationReport.appendChild(section);
-    });
+    if (!window.CandataReport) throw new Error("Candata report is unavailable.");
+    window.CandataReport.render(validationReport, collisions, duplicateGroups);
   }
 
   function transactionLookupKeys(ccnValue, transactionValue) {
@@ -2660,21 +2589,36 @@ function generateTimestamp12() {
         const dt = new DataTransfer();
         dt.items.add(f);
         fileInput.files = dt.files;
-      } catch (err) { /* ignore */ }
+      } catch (err) { alert("This browser cannot accept dropped files here. Choose the file instead."); return; }
+      const selected = fileInput.files && fileInput.files[0];
+      if (!selected || selected.name !== f.name || selected.size !== f.size || selected.type !== f.type) {
+        alert("This browser cannot accept dropped files here. Choose the file instead.");
+        return;
+      }
       if (fileNameDisplay) fileNameDisplay.textContent = f.name;
+      clearValidationReport();
       if (runCandataBtn) runCandataBtn.disabled = false;
     });
 
-    dropArea.addEventListener("click", () => fileInput.click());
+    dropArea.addEventListener("click", (e) => {
+      if (e.target !== fileInput) fileInput.click();
+    });
+    dropArea.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      e.preventDefault();
+      fileInput.click();
+    });
     fileInput.addEventListener("change", (e) => {
       const f = e.target.files && e.target.files[0];
       if (!f) return;
       if (!f.name.toLowerCase().endsWith(".xlsx")) {
         alert("Please select a .xlsx file");
         e.target.value = "";
+        if (fileNameDisplay) fileNameDisplay.textContent = "No file selected";
         return;
       }
       if (fileNameDisplay) fileNameDisplay.textContent = f.name;
+      clearValidationReport();
       if (runCandataBtn) runCandataBtn.disabled = false;
     });
   }
@@ -2689,8 +2633,8 @@ function generateTimestamp12() {
   if (resetCandataBtn) {
     resetCandataBtn.addEventListener("click", () => {
       candataForm.reset();
-      if (headerFileName) headerFileName.textContent = "";
-      if (itemFileName) itemFileName.textContent = "";
+      if (headerFileName) headerFileName.textContent = "No file selected";
+      if (itemFileName) itemFileName.textContent = "No file selected";
       clearValidationReport();
       if (runCandataBtn) runCandataBtn.disabled = false;
       resetCandataBtn.style.display = "none";

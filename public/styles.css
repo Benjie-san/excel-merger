@@ -2150,6 +2150,401 @@ hr {
   }
 }
 
+/* Candata uses the full workspace for input and source review. */
+#candataForm {
+  min-width: 0;
+  align-items: stretch;
+}
+
+#candataForm .sub {
+  margin-bottom: 28px;
+}
+
+.candata-upload-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  width: 100%;
+}
+
+.candata-upload-field {
+  min-width: 0;
+}
+
+.candata-upload-field h3 {
+  margin: 0 0 10px;
+  color: var(--app-text);
+  font-size: 14px;
+  font-weight: 750;
+}
+
+#candataForm .drop-area {
+  min-height: 142px;
+  margin-bottom: 8px;
+  padding: 20px;
+  cursor: pointer;
+}
+
+#candataForm .drop-area:focus-visible,
+#candataForm button:focus-visible,
+#candataForm summary:focus-visible,
+#candataForm .candata-table-scroll:focus-visible,
+#candataForm select:focus-visible,
+#candataForm input[type="search"]:focus-visible {
+  outline: 2px solid var(--app-teal);
+  outline-offset: 3px;
+}
+
+#candataForm .drop-area:hover,
+#candataForm .drop-area.dragover,
+#candataForm .drop-area:focus-visible {
+  border-color: var(--app-teal);
+  background: rgba(69, 214, 198, 0.08);
+}
+
+#candataForm .filename {
+  min-height: 18px;
+  margin-bottom: 0;
+}
+
+.candata-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.candata-actions #runCandata,
+.candata-actions #resetCandataBtn {
+  height: 44px;
+  min-height: 44px;
+  margin: 0;
+}
+
+#candata-result-btn {
+  width: auto;
+  margin: 0;
+}
+
+#candata-result-btn #resetCandataBtn {
+  width: auto;
+}
+
+.candata-validation-report:not(:empty) {
+  min-width: 0;
+  margin-top: 32px;
+  padding: 24px 0 0;
+  color: var(--app-text);
+  background: none;
+  border: 0;
+  border-top: 1px solid var(--app-line-strong);
+  border-radius: 0;
+  overflow: visible;
+}
+
+.candata-validation-report h3 {
+  margin: 0 0 5px;
+  font-size: 20px;
+  letter-spacing: -0.025em;
+}
+
+.candata-validation-report .candata-report-intro,
+.candata-validation-report .candata-report-help {
+  color: var(--app-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.candata-report-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 32px;
+  padding: 20px 0 4px;
+}
+
+.candata-report-count {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.candata-report-count strong {
+  color: var(--app-text);
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+
+.candata-report-section {
+  min-width: 0;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--app-line);
+}
+
+.candata-report-section h4 {
+  margin: 0 0 5px;
+  font-size: 15px;
+}
+
+.candata-report-results {
+  min-width: 0;
+  margin-top: 15px;
+}
+
+.candata-validation-report .candata-result-count,
+.candata-validation-report .candata-report-empty {
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.candata-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--app-line);
+  border-radius: 8px;
+}
+
+.candata-report-table {
+  width: 100%;
+  min-width: max-content;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.candata-report-table th,
+.candata-report-table td {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--app-line);
+}
+
+.candata-report-table th {
+  position: sticky;
+  top: 0;
+  color: var(--app-text);
+  background: var(--app-surface-raised);
+  font-weight: 750;
+}
+
+.candata-report-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.candata-report-table .candata-numeric {
+  text-align: right;
+}
+
+.candata-report-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.candata-report-controls label {
+  display: flex;
+  min-width: min(100%, 220px);
+  flex-direction: column;
+  gap: 6px;
+  color: var(--app-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.candata-report-controls input,
+.candata-report-controls select {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 11px;
+  color: var(--app-text);
+  background: var(--app-ink);
+  border: 1px solid var(--app-line-strong);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 12px;
+}
+
+.candata-group-list {
+  border-top: 1px solid var(--app-line);
+}
+
+.candata-report-group {
+  margin: 0;
+  border-bottom: 1px solid var(--app-line);
+}
+
+.candata-report-group summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 12px 4px;
+  cursor: pointer;
+  list-style-position: inside;
+}
+
+.candata-report-group summary::before {
+  content: "▸";
+  color: var(--app-muted);
+}
+
+.candata-report-group[open] summary::before {
+  content: "▾";
+}
+
+.candata-group-ccn {
+  color: var(--app-text);
+  font-size: 13px;
+  font-weight: 750;
+  overflow-wrap: anywhere;
+}
+
+.candata-group-meta {
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.candata-group-status {
+  margin-left: auto;
+  color: var(--app-teal);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.candata-group-status.is-different,
+.candata-field-tag.is-different {
+  color: var(--app-amber);
+}
+
+.candata-field-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 12px;
+}
+
+.candata-field-tag {
+  padding: 4px 7px;
+  color: var(--app-teal);
+  background: var(--app-surface-raised);
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.025em;
+}
+
+.candata-report-group .candata-table-scroll {
+  margin-bottom: 15px;
+}
+
+.candata-pager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 12px;
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.candata-page-button {
+  min-height: 34px;
+  padding: 6px 10px;
+  color: var(--app-text);
+  background: var(--app-surface-raised);
+  border: 1px solid var(--app-line-strong);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.candata-page-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+@media (max-width: 760px) {
+  .candata-upload-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
+  }
+}
+
+@media (max-width: 600px) {
+  .app-shell:has(#link-candata.is-active) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .app-shell:has(#link-candata.is-active) .side-bar {
+    position: static;
+    width: 100%;
+    height: auto;
+    min-height: 0;
+    padding: 8px 12px;
+    overflow: visible;
+    border-right: 0;
+    border-bottom: 1px solid var(--app-line);
+  }
+
+  .app-shell:has(#link-candata.is-active) .side-bar-brand {
+    display: none;
+  }
+
+  .app-shell:has(#link-candata.is-active) .side-bar-nav {
+    flex-direction: row;
+    justify-content: space-between;
+    gap: 4px;
+  }
+
+  .app-shell:has(#link-candata.is-active) .nav-item {
+    min-width: 0;
+    min-height: 44px;
+    flex: 1 1 0;
+    justify-content: center;
+    padding: 9px 2px;
+  }
+
+  .app-shell:has(#link-candata.is-active) .nav-item.is-active::before {
+    top: auto;
+    bottom: -9px;
+    left: 15%;
+    width: 70%;
+    height: 2px;
+  }
+
+  .app-shell:has(#link-candata.is-active) .app-main {
+    padding: 0 12px 32px;
+  }
+
+  .app-shell:has(#link-candata.is-active) .app-topbar {
+    min-height: 70px;
+    margin-bottom: 16px;
+  }
+
+  .app-shell:has(#link-candata.is-active) .app-topbar h1 {
+    font-size: 19px;
+  }
+
+  #candataTool {
+    padding: 16px;
+  }
+
+  #candataForm .drop-area {
+    min-height: 116px;
+    padding: 14px;
+  }
+
+  .candata-report-counts {
+    gap: 4px 18px;
+  }
+
+  .candata-pager {
+    justify-content: flex-start;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
