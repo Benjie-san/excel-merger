@@ -927,11 +927,16 @@ function generateTimestamp12() {
       "Duty Rate",
       "Duty",
       "Value for Tax",
-      "Gov. Sales Tax"
+      "Gov. Sales Tax",
+      "GST",
+      "HST",
+      "PST",
+      "SIMA",
+      "Surtax"
     ];
-    const columns = numericLabels
+    const columns = [...new Set(numericLabels
       .map((label) => headerRow.indexOf(label))
-      .filter((index) => index !== -1);
+      .filter((index) => index !== -1))];
 
     if (!columns.length) {
       return null;
@@ -1088,13 +1093,18 @@ function generateTimestamp12() {
     try {
       const COL_AC = 28;
       const COL_AS = 44;
-      const COL_H = 7;
-      const COL_J = 9;
 
       const targetRows = await readExcelFile_MOD(targetFileObj);
       const sourceRows = await readExcelFile_MOD(sourceFileObj);
       const headerRowIndex = getTargetHeaderRowIndex_MOD(targetRows);
       const dataStartRowIndex = headerRowIndex + 1;
+      const targetHeaderRow = targetRows[headerRowIndex] || [];
+      const valueForDutyIndex = targetHeaderRow.findIndex(
+        (cell) => String(cell || "").trim().toLowerCase() === "value for duty"
+      );
+      if (valueForDutyIndex === -1) {
+        throw new Error("DutiesHeader is missing Value for Duty.");
+      }
 
       const sftpValueMap = new Map();
       for (let r = 2; r < sourceRows.length; r++) {
@@ -1114,7 +1124,7 @@ function generateTimestamp12() {
       for (let r = dataStartRowIndex; r < targetRows.length; r++) {
         const row = targetRows[r] || [];
         const ccnRaw = workflow.getRecordCcn(row, targetRows[headerRowIndex]);
-        const valueRaw = row[COL_J];
+        const valueRaw = row[valueForDutyIndex];
         const ccn = ccnRaw === undefined || ccnRaw === null ? "" : String(ccnRaw).trim();
         if (!ccn.startsWith("8308")) continue;
 
@@ -1249,8 +1259,18 @@ function generateTimestamp12() {
       : "";
     const dutyMatch = item && compare ? !!compare.dutyMatch : false;
     const gstMatch = item && compare ? !!compare.gstMatch : false;
-    const matchClass = item ? (dutyMatch && gstMatch ? "is-success" : "is-warning") : "is-muted";
-    const matchLabel = item ? (dutyMatch && gstMatch ? "Matched" : "Review") : "Not available";
+    const additionalTaxComparisons = item ? [
+      { label: "HST", headerValue: header.totalHstValue, itemValue: item.totalHstValue, matched: compare.hstMatch },
+      { label: "PST", headerValue: header.totalPstValue, itemValue: item.totalPstValue, matched: compare.pstMatch },
+      { label: "SIMA", headerValue: header.totalSimaValue, itemValue: item.totalSimaValue, matched: compare.simaMatch },
+      { label: "Surtax", headerValue: header.totalSurtaxValue, itemValue: item.totalSurtaxValue, matched: compare.surtaxMatch }
+    ].filter((entry) => entry.matched !== null && entry.matched !== undefined) : [];
+    const allTotalsMatch = dutyMatch && gstMatch && additionalTaxComparisons.every((entry) => entry.matched);
+    const matchClass = item ? (allTotalsMatch ? "is-success" : "is-warning") : "is-muted";
+    const matchLabel = item ? (allTotalsMatch ? "Matched" : "Review") : "Not available";
+    const additionalTaxRows = additionalTaxComparisons
+      .map((entry) => `<div><span>${entry.label}</span><strong>${describeTotalsMatch_MOD(entry.label, entry.headerValue, entry.itemValue, entry.matched)}</strong></div>`)
+      .join("");
 
     reportEl.innerHTML = `
       <div class="analyze-report-container dt-report-container">
@@ -1320,6 +1340,7 @@ function generateTimestamp12() {
                   ? `<div class="dt-report-check-list">
                       <div><span>Duty</span><strong>${describeTotalsMatch_MOD("Duty", header.totalDutyValue, item.totalDutyValue, dutyMatch)}</strong></div>
                       <div><span>GST</span><strong>${describeTotalsMatch_MOD("GST", header.totalGstValue, item.totalGstValue, gstMatch)}</strong></div>
+                      ${additionalTaxRows}
                     </div>`
                   : `<div class="dt-report-empty-state"><span class="dt-report-empty-icon" aria-hidden="true">—</span><p>No DutiesItem file was provided for comparison.</p></div>`}
               </article>
